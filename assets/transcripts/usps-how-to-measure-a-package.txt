@@ -1,0 +1,45 @@
+A single inch can decide a football game. (Measuring chain shows a football just short of a first down.)
+
+A single ounce can make the perfect cake. (Shows baking powder being weighed on a digital kitchen scale.)
+ 
+And measuring every inch and ounce precisely can help ensure you get the optimal price for your parcel deliveries with USPS. (Door closes on back of a Postal vehicle filled with packages.)
+
+So, before you ship, follow these tips on how to measure your package. (Shows a variety of brown boxes, the last being measured with a tape measure under title, "How to Measure a Package.")
+
+Measuring a package is all about the dimensions and weight. 
+
+Dimension consists of length, width, and height.  
+
+Length is the longest dimension. 
+
+Width is the horizontal measure side-to-side, perpendicular to the length.
+ 
+And height is the vertical dimension, measured top-to-bottom. 
+
+For rectangular parcels, record the exterior dimensions for length, width, and height in inches -- using sewing or measuring tape.
+
+Multiply each of these dimensions together to find the volume of your package in cubic inches. (Shows an example package's measurements: 16" long x 6" wide x 12" high = 1,152 cubic inches.)
+
+For non-rectangular parcels, apply the same formula of length times width times height. 
+
+And then multiply this result by 0.785 to determine your volume. (Shows a triangular box that's 25.5" long x 6" wide x 5.25" high x 0.795 = 630.5 cubic inches.)
+
+For tubes, use the diameter of the circular base as your width and height, and the longest side for length. (Shows a circular tube with a diameter of 4" and length of 12" and the formula 12" long x 4" wide x 4" high x 0.785 = 150.7 cubic inches.)
+
+Weight, measured in pounds and ounces, requires a scale. 
+
+We offer them in our Post Office locations(TM), including at our self-service kiosks. 
+
+Dimensional weight, or dim weight, is a pricing concept that considers both the weight of a parcel and its size.
+
+Because it might cost more to ship a large box of feathers than a small box of rocks, dim weight is compared against the actual weight of a parcel, and the greater value is used for shipping cost adjustments.
+
+Anything larger than one cubic foot -- or 1,728 cubic inches -- will require a dim weight calculation. (Shows a variety of boxes, each with at least one measurement greater than 12 inches, that are larger than 1 cubic foot.)
+
+To find dimensional weight, or dim weight, measured in pounds, take your volume (length times width times height) and divide by 166. 
+
+With your measurements, use the postage price calculator on the USPS.com website to estimate the cost of your shipment.
+
+Now that you know how to measure your package, we hope these tips will take your shipping skills to new dimensions. (Shows a person measuring a package with a tape measure.)
+
+Thanks for watching!

@@ -1,0 +1,1705 @@
+
+/* FONTS */
+b,strong {
+	font-weight:normal!Important;
+	font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif!important;
+
+}
+* {
+		font-weight:normal!Important;
+}
+
+.header-1 {
+	font-size: 48px;
+	line-height: 56px;
+	font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.header-2 {
+	font-size: 48px;
+	line-height: 56px;
+	font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.header-3 {
+	font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	margin-block-start: 00;
+	margin-block-end: 0;
+	font-size: 22px;
+	line-height: 26px;
+	}
+.header-4 {
+	font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.hero p {
+	font-size: 22px;
+	line-height: 26px;
+	font-family: "HelveticaNeueW02-55Roma", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+p {
+	font-size: 22px;
+	line-height: 26px;
+	font-family: "HelveticaNeueW02-55Roma", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+p a, ol.for-mailable-items-up-to-70-lb a {
+    color: #3573b1;
+    text-decoration: underline;
+}
+p a:hover,p a:focus,ol.for-mailable-items-up-to-70-lb a:hover {
+    text-decoration: none;
+}
+sup a {
+    text-decoration: none!important;
+}
+.frame-parent .button a {
+    color: #FFFFFF;
+}
+.frame-parent .button:hover {
+    background-color:#F7f7f7;
+}
+.frame-parent .button:hover a {
+    color: #333366;;
+}
+
+.mobile-ga-for-business-button a,.button2 a,.button3 a,.button4 a {
+    color:#333366;
+        font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.mobile-ga-for-business-button:hover,.button2:hover,.button3:hover,.button4:hover  {
+    background:#F7F7F7;
+}
+
+.business-price-calculator {
+    text-decoration:underline;
+}
+.business-price-calculator a {
+    color:#337ab7!important;
+    
+}
+.business-price-calculator:hover {
+    text-decoration:none;
+}
+div#pageContentContainer {
+
+}
+.mobile-ga-for-business {
+  	width: 100%;
+  	position: relative;
+  	background-color: #fff;
+  	/* overflow: hidden; */
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	text-align: left;
+  	font-size: 15px;
+  	color: #000;
+	font-family: "HelveticaNeueW02-55Roma", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.iphone-status-bar {
+  	align-self: stretch;
+  	position: relative;
+  	background-color: #fff;
+  	height: 55px;
+  	text-align: center;
+  	font-family: Roboto;
+}
+.connections-icon {
+  	position: absolute;
+  	top: 15px;
+  	right: 14px;
+  	width: 68px;
+  	height: 16px;
+  	object-fit: cover;
+}
+.time {
+  	position: absolute;
+  	top: 8px;
+  	left: 21px;
+  	width: 56px;
+  	height: 23px;
+}
+.mobile-ga-for-business-time {
+  	position: absolute;
+  	width: calc(100% - 2px);
+  	top: calc(50% - 5.5px);
+  	left: 0.33px;
+  	letter-spacing: -0.33px;
+  	font-weight: 600;
+  	display: inline-block;
+}
+.global-header {
+  	width: 950px;
+  	background-color: #f7f7f7;
+  	border-bottom: 2px solid #e71921;
+  	box-sizing: border-box;
+  	display: flex;
+  	align-items: center;
+  	justify-content: space-between;
+  	padding: 12px;
+  	gap: 0px;
+}
+.mobile-menu-icon {
+  	width: 34px;
+  	position: relative;
+  	height: 25px;
+  	object-fit: cover;
+}
+.logousps-mobile-icon {
+  	width: 44.1px;
+  	position: relative;
+  	height: 26.9px;
+  	object-fit: cover;
+}
+.search-icon {
+  	width: 28px;
+  	position: relative;
+  	height: 28px;
+  	object-fit: cover;
+}
+.page-content {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	font-size: 28px;
+  	color: #333366;
+}
+.frame-parent {
+  	align-self: stretch;
+  	background-color: #f9fcff;
+  	display: flex;
+  	align-items: flex-start;
+  	justify-content: space-between;
+  	padding: 80px 130px;
+  	gap: 80px;
+  	font-size: 18px;
+}
+.online-shipping-made-simple-parent {
+  	width: 371px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 24px;
+}
+.online-shipping-made-container {
+  	align-self: stretch;
+  	position: relative;
+  	font-size: 40px;
+}
+.usps-ground-advantage {
+  	margin: 0;
+}
+.usps-helps-your {
+  	align-self: stretch;
+  	position: relative;
+  	line-height: 22px;
+  	color: #000;
+}
+.lorem-ipsum-dolor-container {
+  	align-self: stretch;
+  	position: relative;
+  	line-height: 22px;
+  	color: #3573b1;
+}
+.mobile-ga-for-business-usps-helps-your {
+  	margin-block-start: 0;
+  	/* margin-block-end: 16px; */
+  	color: #000;
+}
+.p {
+  	margin-block-start: 0;
+  	margin-block-end: 16px;
+}
+.lowest-rates-with {
+  	margin: 0;
+  	color: #000;
+}
+.sup {
+  	color: #000;
+}
+.button {
+  	border-radius: 4px;
+  	background-color: #333366;
+  	border: 1px solid #333366;
+  	box-sizing: border-box;
+  	height: 44px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 0px 20px;
+  	font-size: 16px;
+  	color: #fff;
+}
+.button-text {
+  	position: relative;
+}
+.frame-child {
+  	width: 326px;
+  	position: relative;
+  	border-radius: 8px;
+  	height: 426px;
+  	object-fit: cover;
+}
+.the-usps-advantage {
+  	align-self: stretch;
+  	background-color: #d8e4ef;
+  	/* overflow: hidden; */
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 80px;
+  	gap: 48px;
+  	text-align: center;
+}
+.the-usps-advantage-wrapper {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: center;
+  	justify-content: center;
+}
+.mobile-ga-for-business-the-usps-advantage {
+  	align-self: stretch;
+  	position: relative;
+}
+.the-usps-advantage-inner {
+  	align-self: stretch;
+  	position: relative;
+  	/* height: 269px; */
+  	/* overflow-x: auto; */
+  	flex-shrink: 0;
+  	text-align: left;
+  	font-size: 22px;
+}
+.feature-card-parent1 {
+  	position: absolute;
+  	top: 0px;
+  	left: 0px;
+  	width: 2081px;
+  	display: flex;
+  	align-items: flex-start;
+  	gap: 20px;
+}
+.feature-card {
+  	width: 305px;
+  	border-radius: 12px;
+  	background-color: #fff;
+  	border-top: 10px solid #3573b1;
+  	box-sizing: border-box;
+  	height: 269px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 48px 32px;
+  	gap: 20px;
+}
+.tracking-icon {
+  	width: 40px;
+  	position: relative;
+  	max-height: 100%;
+}
+.frame-group {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 12px;
+}
+.heading-wrapper {
+  	align-self: stretch;
+  	display: flex;
+  	align-items: center;
+}
+.heading {
+  	display: flex;
+  	align-items: flex-start;
+  	flex-wrap: wrap;
+  	align-content: flex-start;
+}
+.mobile-ga-for-business-lorem-ipsum-dolor-container {
+  	width: 230px;
+  	position: relative;
+  	font-size: 18px;
+  	line-height: 24px;
+  	color: #000;
+  	display: inline-block;
+}
+.savings-icon {
+  	width: 50px;
+  	position: relative;
+  	max-height: 100%;
+}
+.feature-card-child {
+  	width: 60px;
+  	height: 39px;
+}
+.heading2 {
+  	display: flex;
+  	align-items: flex-start;
+  	flex-wrap: wrap;
+  	align-content: flex-start;
+  	flex-shrink: 0;
+}
+.feature-card3 {
+  	width: 305px;
+  	border-radius: 12px;
+  	background-color: #fff;
+  	border-top: 10px solid #3573b1;
+  	box-sizing: border-box;
+  	height: 269px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 48px 32px;
+  	gap: 20px;
+}
+.password-lock-icon {
+  	width: 35.4px;
+  	position: relative;
+  	height: 48px;
+}
+.print-shipping-label {
+  	width: 43px;
+  	position: relative;
+  	max-height: 100%;
+}
+.feature-card-item {
+  	width: 45px;
+  	height: 41px;
+}
+.lorem-ipsum-dolor-container2 {
+  	width: 268px;
+  	position: relative;
+  	font-size: 18px;
+  	line-height: 24px;
+  	display: inline-block;
+  	color: #3573b1;
+}
+.controls {
+  	align-self: stretch;
+  	display: flex;
+  	align-items: center;
+  	gap: 20px;
+  	text-align: right;
+  	font-size: 18px;
+  	color: #000;
+}
+.controls-child {
+  	width: 32px;
+  	border-radius: 100px;
+  	height: 32px;
+  	object-fit: contain;
+}
+.lorem-ipsum-dolor4 {
+  	flex: 1;
+  	position: relative;
+  	line-height: 24px;
+}
+.frame-parent4 {
+  	align-self: stretch;
+  	background-color: #f9fcff;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	justify-content: center;
+  	padding: 80px 80px 0px;
+  	gap: 48px;
+  	text-align: center;
+}
+.frame-parent5 {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: center;
+  	gap: 32px;
+}
+.cheapest-ground-shipping-in-th-parent {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: center;
+  	justify-content: center;
+  	gap: 12px;
+}
+.frame-parent5 h2.header-2.mobile-ga-for-business-the-usps-advantage {
+    font-size: 48px;
+    line-height: 52px;
+	font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.the-usps-advantage-wrapper h2.header-2.mobile-ga-for-business-the-usps-advantage {
+	white-space:nowrap;
+}
+.you-pay-what {
+    width: 660px;
+    position: relative;
+    font-size: 24px;
+    line-height: 28px;
+    color: #000;
+    display: inline-block;
+	font-family: "HelveticaNeueW02-55Roma", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.mobile-ga-for-business-button {
+  	border-radius: 4px;
+  	background-color: #fff;
+  	border: 1px solid #333366;
+  	box-sizing: border-box;
+  	height: 44px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 0px 20px;
+  	text-align: left;
+  	font-size: 16px;
+}
+
+.group-div {
+  	align-self: stretch;
+  	position: relative;
+  	text-align: left;
+  	font-size: 15.27px;
+  	color: #000;
+}
+.leading-together-parent {
+  	position: absolute;
+  	top: 59.13px;
+  	left: 500.54px;
+  	box-shadow: 0px 2.7761006355285645px 9.72px rgba(0, 0, 0, 0.25);
+  	border-radius: 5.55px;
+  	background-color: #fff;
+  	width: 189.8px;
+  	height: 35.1px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 8.3px 11.1px;
+  	box-sizing: border-box;
+  	gap: 6.9px;
+}
+.leading-together {
+  	width: 39.1px;
+  	position: relative;
+  	height: 33.3px;
+  	display: none;
+}
+.paper-delivery {
+  	width: 27.4px;
+  	position: relative;
+  	height: 33.3px;
+  	display: none;
+}
+.approved-icon {
+  	width: 18px;
+  	position: relative;
+  	height: 14.6px;
+}
+.adobestock-613750327-icon {
+  	position: absolute;
+  	top: 0px;
+  	left: 184.26px;
+  	width: 442.8px;
+  	height: 404.3px;
+  	object-fit: cover;
+}
+.leading-together-group {
+  	position: absolute;
+  	top: 110.7px;
+  	left: 500.54px;
+  	box-shadow: 0px 2.7761006355285645px 9.72px rgba(0, 0, 0, 0.25);
+  	border-radius: 5.55px;
+  	background-color: #fff;
+  	width: 268.1px;
+  	height: 35.1px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 8.3px 11.1px;
+  	box-sizing: border-box;
+  	gap: 6.9px;
+}
+.statistics-parent {
+  	position: absolute;
+  	top: 34.38px;
+  	left: 57.07px;
+  	box-shadow: 0px 2.7761006355285645px 9.72px rgba(0, 0, 0, 0.25);
+  	border-radius: 5.55px;
+  	background-color: #fff;
+  	width: 166.4px;
+  	height: 91.4px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	justify-content: center;
+  	padding: 8.3px 11.1px;
+  	box-sizing: border-box;
+  	gap: 6.9px;
+}
+.statistics-icon {
+  	width: 33.3px;
+  	position: relative;
+  	height: 29.1px;
+}
+.frame-wrapper {
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	justify-content: center;
+}
+.savings-potential-wrapper {
+  	display: flex;
+  	align-items: flex-start;
+}
+.rectangle-parent {
+  	width: 145.7px;
+  	position: relative;
+  	height: 13.9px;
+}
+.group-child {
+  	position: absolute;
+  	top: 0px;
+  	left: 0px;
+  	background-color: #ecf3ec;
+  	width: 145.7px;
+  	height: 13.9px;
+}
+.group-item {
+  	position: absolute;
+  	top: 0px;
+  	left: 0px;
+  	background-color: #218748;
+  	width: 104.8px;
+  	height: 13.9px;
+}
+.business-parent {
+  	position: absolute;
+  	top: 185.64px;
+  	left: 0px;
+  	box-shadow: 0px 2.7761006355285645px 9.72px rgba(0, 0, 0, 0.25);
+  	border-radius: 5.55px;
+  	background-color: #fff;
+  	width: 204.9px;
+  	height: 46.8px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 8.3px 11.1px;
+  	box-sizing: border-box;
+  	gap: 16.7px;
+  	font-size: 12.49px;
+}
+.business-icon {
+  	width: 29.1px;
+  	position: relative;
+  	height: 30.5px;
+}
+.no-fuel-delivery {
+  	width: 138.8px;
+  	position: relative;
+  	display: inline-block;
+  	flex-shrink: 0;
+}
+.mobile-ga-for-business-frame-wrapper {
+  	position: absolute;
+  	top: 209.02px;
+  	left: 611.24px;
+  	box-shadow: 0px 2.7761006355285645px 9.72px rgba(0, 0, 0, 0.25);
+  	border-radius: 5.55px;
+  	background-color: #fff;
+  	width: 178.8px;
+  	height: 108.6px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 8.3px 11.1px;
+  	box-sizing: border-box;
+}
+.report-cyber-security-incident-parent {
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	justify-content: center;
+  	gap: 6.9px;
+}
+.report-cyber-security-incident {
+  	width: 36.1px;
+  	position: relative;
+  	height: 24.3px;
+}
+.usps-ground-advantage-cubic-container {
+  	position: relative;
+  	font-size: 13.88px;
+  	line-height: 18.04px;
+}
+.mobile-ga-for-business-usps-ground-advantage {
+  	margin-block-start: 0;
+  	margin-block-end: 11.1px;
+}
+.frame-wrapper2 {
+  	position: absolute;
+  	top: 282.58px;
+  	left: 134.07px;
+  	box-shadow: 0px 2.7761006355285645px 9.72px rgba(0, 0, 0, 0.25);
+  	border-radius: 5.55px;
+  	background-color: #fff;
+  	width: 165.7px;
+  	height: 35.1px;
+  	display: flex;
+  	align-items: center;
+  	padding: 8.3px 11.1px;
+  	box-sizing: border-box;
+}
+.group-inner {
+  	position: absolute;
+  	top: 272.27px;
+  	left: 88.01px;
+  	width: 60.9px;
+  	height: 63.9px;
+  	object-fit: cover;
+}
+.component-1 {
+  	position: relative;
+  	background-color: #d8e4ef;
+  	height: 71.9px;
+  	/* overflow: hidden; */
+  	flex-shrink: 0;
+  	display: none;
+}
+.lorem-ipsum-dolor-sit-amet-con-parent {
+  	background-color: #f9fcff;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 80px;
+  	box-sizing: border-box;
+  	gap: 48px;
+  	font-size: 16px;
+}
+.lorem-ipsum-dolor5 {
+  	width: 382px;
+  	position: relative;
+  	line-height: 22px;
+  	display: none;
+}
+.large-business-small-mediu-parent {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 10px;
+  	text-align: center;
+  	font-size: 28px;
+}
+.no-matter-the-container {
+  	align-self: stretch;
+  	position: relative;
+  	font-size: 24px;
+  	line-height: 28px;
+  	color: #000;
+}
+.body {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 48px;
+  	font-size: 22px;
+  	color: #000;
+}
+.steps-content {
+  	align-self: stretch;
+  	display: flex;
+  	align-items: flex-start;
+  	gap: 150px;
+}
+.steps-content-child {
+  	width: 371px;
+  	position: relative;
+  	max-height: 100%;
+  	object-fit: cover;
+}
+.copy {
+  	flex: 1;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	justify-content: center;
+  	gap: 32px;
+}
+.if-youre-a-container {
+  	align-self: stretch;
+  	position: relative;
+  	font-size: 18px;
+  	line-height: 24px;
+}
+.lorem-ipsum-parent {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 24px;
+  	font-size: 18px;
+  	color: #333366;
+}
+.bullets {
+  	align-self: stretch;
+  	border-left: 2px solid #333366;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 0px 0px 0px 16px;
+  	color: #000;
+}
+.mobile-ga-for-business-bullets {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+}
+.ground-advantage-cubic {
+  	align-self: stretch;
+  	position: relative;
+  	line-height: 24px;
+	font-size:18px;
+	    font-family: "HelveticaNeueW02-55Roma", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.ready-to-get {
+  	align-self: stretch;
+  	position: relative;
+  	font-size: 14px;
+  	line-height: 18px;
+  	color: #000;
+    font-family: "HelveticaNeueW02-55Roma", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.button2 {
+  	border-radius: 4px;
+  	background-color: #fff;
+  	border: 1px solid #333366;
+  	box-sizing: border-box;
+  	height: 44px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 0px 20px;
+  	font-size: 16px;
+}
+.mobile-ga-for-business-steps-content {
+  	align-self: stretch;
+  	display: flex;
+  	align-items: flex-start;
+  	gap: 150px;
+  	color: #333366;
+}
+.adobestock-463404305-2-icon {
+  	width: 371px;
+  	position: relative;
+  	border-radius: 8px;
+  	max-height: 100%;
+  	object-fit: cover;
+}
+.small-to-medium-sized-busines-parent {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 12px;
+  	color: #000;
+}
+.helpful-links-parent {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 24px;
+  	font-size: 18px;
+}
+.bullets2 {
+  	align-self: stretch;
+  	border-left: 2px solid #333366;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 0px 0px 0px 16px;
+  	color: #3573b1;
+}
+.bullets3 {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 16px;
+}
+.business-price-calculator {
+  	align-self: stretch;
+  	position: relative;
+  	text-decoration: underline;
+  	line-height: 24px;
+}
+.button-wrapper {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	font-size: 16px;
+}
+.button3 {
+  	border-radius: 4px;
+  	background-color: #fff;
+  	border: 1px solid #333366;
+  	box-sizing: border-box;
+  	height: 44px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 0px 20px;
+}
+.page-hero {
+  	background-color: #333366;
+  	/* overflow: hidden; */
+  	display: flex;
+  	align-items: center;
+  	color: #fff;
+}
+.hero-left-side {
+  	flex: 1;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 54px 48px 37px 48px;
+  	gap: 48px;
+}
+.hero-left-side b.mobile-ga-for-business-the-usps-advantage {
+    font-size: 48px;
+    line-height: 52px;
+}
+.hero-left-side p {
+    font-size: 18px;
+    line-height: 22px;
+}
+.frame-parent6 {
+  	align-self: stretch;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: center;
+  	justify-content: center;
+  	gap: 21px;
+}
+.button-and-link {
+  	display: flex;
+  	align-items: center;
+  	gap: 24px;
+  	font-size: 16px;
+  	color: #333366;
+}
+.button4 {
+  	border-radius: 4px;
+  	background-color: #fff;
+  	border: 1px solid #333366;
+  	box-sizing: border-box;
+  	height: 44px;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 0px 20px;
+  	flex-shrink: 0;
+}
+.secondary-link {
+  	width: 119px;
+  	position: relative;
+  	text-decoration: underline;
+  	line-height: 22px;
+  	display: none;
+  	color: #3573b1;
+  	flex-shrink: 0;
+}
+.image-container {
+  	width: 419px;
+  	display: flex;
+  	align-items: center;
+  	position: relative;
+}
+.image-icon {
+  	position: relative;
+  	height: 403px;
+  	object-fit: cover;
+  	z-index: 0;
+  	flex-shrink: 0;
+}
+.image-container-child {
+  	width: 82px;
+  	position: absolute;
+  	margin: 0 !important;
+  	top: 0px;
+  	left: 0px;
+  	height: 403px;
+  	z-index: 1;
+  	flex-shrink: 0;
+}
+.lorem-ipsum-dolor-sit-amet-con-wrapper {
+  	align-self: stretch;
+  	display: flex;
+  	align-items: center;
+  	justify-content: center;
+  	padding: 16px;
+  	font-size: 14px;
+  	color: #000;
+}
+.lorem-ipsum-dolor-container3 {
+  	flex: 1;
+  	position: relative;
+  	line-height: 20px;
+}
+.for-mailable-items-up-to-70-lb {
+  	margin: 0;
+  	font-family: inherit;
+  	font-size: inherit;
+  	padding-left: 19px;
+}
+.mobile-ga-for-business-for-mailable-items-up-to-70-lb {
+  	margin-bottom: 0px;
+}
+.back {
+  	text-decoration: underline;
+  	color: #3573b1;
+}
+.footer {
+  	width: 950px;
+  	background-color: #f7f7f7;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: center;
+  	padding: 32px;
+  	box-sizing: border-box;
+  	gap: 48px;
+  	font-size: 11px;
+}
+.footer-top {
+  	width: 900px;
+  	height: 201px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	justify-content: space-between;
+  	gap: 0px;
+  	min-width: 340px;
+  	max-width: 1080px;
+}
+.uspscom {
+  	width: 200px;
+  	position: relative;
+  	height: 26px;
+}
+.usps-logo-icon {
+  	position: absolute;
+  	height: 94.62%;
+  	width: 100%;
+  	top: 0%;
+  	right: 1%;
+  	bottom: 5.38%;
+  	left: -1%;
+  	max-width: 100%;
+  	/* overflow: hidden; */
+  	max-height: 100%;
+}
+.footer-links {
+  	align-self: stretch;
+  	display: flex;
+  	align-items: flex-start;
+  	justify-content: space-between;
+  	flex-wrap: wrap;
+  	align-content: flex-start;
+  	gap: 41px 0px;
+}
+.col-1 {
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 24px;
+}
+.mobile-ga-for-business-footer-links {
+  	width: 119px;
+  	height: 89px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 4px;
+  	box-sizing: border-box;
+  	gap: 4px;
+}
+.footer-content {
+  	align-self: stretch;
+  	position: relative;
+  	height: 13px;
+  	color: #333366;
+}
+.mobile-ga-for-business-footer-content {
+  	position: absolute;
+  	width: 100%;
+  	top: 0%;
+  	left: 0%;
+  	text-transform: uppercase;
+  	display: inline-block;
+}
+.footer-content2 {
+  	align-self: stretch;
+  	position: relative;
+  	height: 13px;
+}
+.footer-content3 {
+  	position: absolute;
+  	top: 0%;
+  	left: 0%;
+  	font-weight: 500;
+}
+.footer-content6 {
+  	align-self: stretch;
+  	flex: 1;
+  	position: relative;
+}
+.footer-links2 {
+  	width: 119px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 4px;
+  	box-sizing: border-box;
+  	gap: 4px;
+  	color: #333366;
+}
+.footer-content12 {
+  	align-self: stretch;
+  	position: relative;
+  	height: 13px;
+  	color: #000;
+}
+.footer-links3 {
+  	width: 150px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 4px;
+  	box-sizing: border-box;
+  	gap: 4px;
+}
+.footer-content18 {
+  	width: 86px;
+  	position: relative;
+  	height: 13px;
+}
+.footer-links4 {
+  	width: 154px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 4px;
+  	box-sizing: border-box;
+  	gap: 4px;
+}
+.footer-bottom {
+  	width: 900px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	gap: 24px;
+  	min-width: 340px;
+  	max-width: 1080px;
+}
+.copyright-2023 {
+  	position: relative;
+  	line-height: 14px;
+  	font-weight: 300;
+}
+.footer-social-icons {
+  	align-self: stretch;
+  	border-top: 1px solid #999;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 16px 0px;
+}
+.social-icons {
+  	width: 100%;
+  	/* overflow: hidden; */
+  	display: flex;
+  	align-items: center;
+  	padding: 0px 10px;
+  	box-sizing: border-box;
+  	gap: 16px;
+  	min-width: 360px;
+  	max-width: 1090px;
+  	z-index: 0;
+}
+.footer-social-icon {
+  	width: 32px;
+  	position: relative;
+  	border-radius: 16px;
+  	background-color: #f7f7f7;
+  	height: 32px;
+}
+.facebook-icon {
+  	position: absolute;
+  	top: 6px;
+  	left: 6px;
+  	width: 20px;
+  	height: 20px;
+}
+.instagram-icon {
+  	position: absolute;
+  	top: 6px;
+  	left: 6px;
+  	width: 20px;
+  	height: 20px;
+  	object-fit: cover;
+}
+.pinterest {
+  	position: absolute;
+  	top: 6px;
+  	left: 6px;
+  	width: 20px;
+  	height: 20px;
+  	/* overflow: hidden; */
+}
+.page-1 {
+  	position: absolute;
+  	height: 100%;
+  	width: 100%;
+  	top: 0%;
+  	right: 0%;
+  	bottom: 0%;
+  	left: 0%;
+}
+.group-icon {
+  	position: absolute;
+  	height: 100%;
+  	width: 100%;
+  	top: 0%;
+  	right: 0%;
+  	bottom: 0%;
+  	left: 0%;
+  	max-width: 100%;
+  	/* overflow: hidden; */
+  	max-height: 100%;
+  	object-fit: cover;
+}
+.threads-icon {
+  	position: absolute;
+  	top: 6px;
+  	left: 7px;
+  	width: 18px;
+  	height: 20px;
+}
+.x-twitter-icon {
+  	position: absolute;
+  	top: 6px;
+  	left: 6.99px;
+  	width: 19px;
+  	height: 20px;
+}
+.youtube {
+  	position: absolute;
+  	top: 9.29px;
+  	left: 6.99px;
+  	width: 19px;
+  	height: 13.4px;
+}
+.large-business-small-mediu-parent p.p, .large-business-small-mediu-parent p {
+    font-size: 28px;
+    line-height: 32px;
+    margin:0;
+}
+
+
+
+.lorem-ipsum-dolor-sit-amet-con-parent {
+    /* background: red; */
+    gap: 24px;
+}
+.tab-parent {
+  	flex: 1;
+  	background-color: #fff;
+  	display: flex;
+  	align-items: center;
+  	padding: 16px;
+  	gap: 16px;
+}
+.tab {
+  	flex: 1;
+  	border-radius: 8px;
+  	background-color: #F7F7F5;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: flex-start;
+  	padding: 23px 32px;
+  	gap: 8px;
+  	color: #333366;
+  
+}
+.tab-parent .tab,
+.tab-parent .consumer-online-shipping-page-tab {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.tab-parent .active {
+    background: #333366;
+    color: #fff;
+}
+.step-1 {
+  	position: relative;
+  	line-height: 20px;
+  	text-transform: uppercase;
+}
+
+
+.tab p {
+    font-size: 28px;
+    line-height: 32px;
+    font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    margin: 00;
+	white-space: nowrap;
+}
+
+.tab {
+    height: 65px;
+    align-self: center;
+    justify-content: center;
+}
+
+.tab-container {
+    width:100%;
+}
+.leading-together-group, .leading-together-parent,
+.statistics-parent,img.group-inner,.mobile-ga-for-business-frame-wrapper,
+.business-parent,.business-parent, .business-parentm, .frame-wrapper2{
+    display: none;
+}
+
+img.adobestock-613750327-icon {
+    position: relative;
+    left: unset;
+    top: unset;
+    object-fit: cover;
+    width: 100%;
+    height: auto;
+}
+.feature-card-parent {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 24px 32px;
+    flex-wrap: wrap;
+}
+.controls {
+    display: none;
+}
+.lorem-ipsum-dolor-sit-amet-con-parent .body {
+    padding: 55px 00;
+}
+.lorem-ipsum-dolor-sit-amet-con-parent .body .header-4{
+	    font-size: 28px;
+    line-height: 32px;
+    font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    margin: 00;
+}
+
+.lorem-ipsum-dolor-sit-amet-con-parent .body p {
+    font-size: 18px;
+    line-height: 22px;
+    font-family: "HelveticaNeueW02-55Roma", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.hero-left-side p:last-child {
+    margin: 0;
+}
+
+
+.controls {
+	display:none;
+}
+.auto-scroller {
+	display:none;
+}
+.bg {
+    width: 100%;
+}
+.the-usps-advantage,.frame-parent4,.frame-parent,.lorem-ipsum-dolor-sit-amet-con-wrapper {
+    max-width: 1180px;
+    margin: 0 auto;
+	    overflow: hidden;
+}
+
+.lorem-ipsum-dolor-sit-amet-con-parent,.page-hero {
+    max-width: 1180px;
+    margin: 0 auto;
+}
+
+.scroll-container div {
+    color: #000000;
+}
+
+
+.large-business-small-mediu-parent b.mobile-ga-for-business-the-usps-advantage {
+    font-size: 48px;
+    line-height: 52px;
+}
+.large-business-small-mediu-parent .no-matter-the-container p {
+    font-size:28px;
+    line-height:32px;
+}
+p.mobile-ga-for-business-usps-helps-your.more-space {
+    width: 120%;
+}
+a.button-text {
+    white-space: nowrap;
+}
+
+img.mobile-person {
+	display:none;
+}
+@media (max-width:992px) {
+ p.mobile-ga-for-business-usps-helps-your.more-space {
+    width: 100%;
+}
+  .page-hero {
+    overflow: hidden;
+}
+	h1.header-1.usps-ground-advantage {
+		font-size: 40px;
+		line-height: 44px;
+	}
+	h2.usps-helps-your.header-3,p {
+		font-size: 18px;
+		line-height: 22px;
+	}
+	.frame-parent {
+		padding: 80px 64px;
+	}	   
+	.feature-card-parent {
+		flex-wrap: nowrap;
+		position: relative;
+		justify-content: left;
+      transition: left 1s;
+      left:0;
+	}
+	.page-count p {
+		letter-spacing: 12px;
+	}
+	.the-usps-advantage {
+		padding: 80px 64px 80px 64px;
+		overflow:hidden;
+	}
+	.controls {
+		display: flex;
+		flex-direction: row;
+		flex-wrap: nowrap;
+		justify-content: space-between;
+	}
+	.control-arrows {
+		display: flex;
+		gap: 20px;
+		flex-wrap: nowrap;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.page-count {
+		display: flex;
+		flex-direction: row;
+		flex-wrap: nowrap;
+		align-items: center;
+	}
+	.the-usps-advantage-inner {
+		clip-path: polygon(0 0, 100% 0%, 1000% 98%, 0 100%);
+		-webkit-clip-path: polygon(0 0, 100% 0%, 1000% 98%, 0 100% 100%);
+	}	
+	h2.header-2.mobile-ga-for-business-the-usps-advantage {
+		font-size:28px;
+		line-height:32px;
+	}
+	.the-usps-advantage-wrapper h2.header-2.mobile-ga-for-business-the-usps-advantage {
+			white-space: wrap;
+
+	}
+	.the-usps-advantage-inner b.button-text {
+		font-size: 22px;
+		line-height: 26px;
+	}
+
+	.the-usps-advantage-inner .mobile-ga-for-business-lorem-ipsum-dolor-container {
+		font-size:18px;
+		line-height:22px;
+	}
+	.frame-parent4 {
+		padding: 80px 64px 0 64px;
+	}
+
+	.you-pay-what {
+		font-size: 18px;
+		line-height: 22px;
+	}
+
+	.frame-parent5 {}
+
+	.lorem-ipsum-dolor-sit-amet-con-parent {
+		padding: 80px 64px;
+	}
+
+	.large-business-small-mediu-parent p.p, .large-business-small-mediu-parent p {
+		font-size: 18px;
+		line-height: 22px;
+	}
+
+	.tab-container {
+		display: none;
+	}
+
+	.lorem-ipsum-dolor-sit-amet-con-parent .body {
+		padding-top:24px;
+	}
+
+	.lorem-ipsum-dolor-sit-amet-con-parent .body .header-4 {
+		font-size: 22px;
+		line-height: 26px;
+	}
+
+	.steps-content,.mobile-ga-for-business-steps-content {
+		gap: 48px;
+	}
+
+
+	.hero-left-side b.mobile-ga-for-business-the-usps-advantage {
+		font-size: 34px;
+		line-height: 36px;
+	}
+
+	.hero-left-side {
+		padding: 48px 48px 37px 48px;
+	}
+
+	.lorem-ipsum-dolor-sit-amet-con-wrapper {
+		padding: 48px 64px;
+	}
+
+	ol.for-mailable-items-up-to-70-lb {
+		list-style: decimal;
+	}
+	
+	.page-hero {
+    overflow: hidden;
+}
+.large-business-small-mediu-parent b.mobile-ga-for-business-the-usps-advantage {
+    font-size: 28px;
+    line-height: 32px;
+}
+.large-business-small-mediu-parent .no-matter-the-container p {
+    font-size:18px;
+    line-height:22px;
+}
+}
+
+
+
+
+@media (max-width: 767.9px){
+    html {
+        overflow-x: hidden;
+    }
+
+
+	.frame-parent {
+		padding: 48px 24px;
+		flex-wrap: wrap;
+		gap: 32px;
+	}
+
+	h1.header-1.usps-ground-advantage {
+		font-size: 32px;
+		line-height: 36px;
+	}
+
+	.online-shipping-made-simple-parent {
+		gap: 12px;
+	}
+
+	.online-shipping-made-simple-parent {width: 100%;}
+
+	img.frame-child {
+		width: 100%;
+		height: auto;
+	}
+
+	.the-usps-advantage {
+		padding: 48px 24px;
+	}
+
+	.frame-parent4 {
+		padding: 48px 24px 0 24px;
+	}
+
+	.frame-parent5 h2.header-2.mobile-ga-for-business-the-usps-advantage {
+		font-size: 22px;
+		line-height: 26px;
+	}
+
+	.you-pay-what {
+		width: 100%;
+	}
+
+	.lorem-ipsum-dolor-sit-amet-con-parent {
+		padding: 48px 24px;
+		width: 100%;
+	}
+
+
+
+	.steps-content,.mobile-ga-for-business-steps-content {flex-wrap: wrap;gap: 24px;}
+
+	img.steps-content-child {
+		/* justify-self: center; */
+		/* align-self: center; */
+		margin: 0 auto;
+	}
+
+	.lorem-ipsum-dolor-sit-amet-con-parent .body .header-4 {
+		font-size: 18px;
+		line-height: 22px;
+	}
+
+	img.adobestock-463404305-2-icon {
+		margin: 0 auto;
+	}
+
+	.page-hero {
+		flex-wrap: wrap;
+	}
+
+	.hero-left-side b.mobile-ga-for-business-the-usps-advantage {
+		font-size: 28px;
+		line-height: 32px;
+	}
+
+	.hero-left-side {
+		padding: 48px 24px 48px 24px;
+	}
+
+	.lorem-ipsum-dolor-sit-amet-con-wrapper {
+		padding: 48px 24px;
+	}
+	  
+	.scroll-container {
+		white-space: nowrap;
+		width: 536px;
+	}
+
+	.scroll-container {
+        animation: scrollText 30s linear infinite;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-content: center;
+        justify-content: space-evenly;
+        align-items: center;
+	}
+
+	@keyframes scrollText {
+		0% {transform: translateX(0%);}
+		100% {transform: translateX(-1827px);}
+	}
+
+	.auto-scroller {
+		width: 100%;
+		background: #d8e4ef;
+		overflow:hidden;
+		display: flex;
+		height: auto;
+		flex-wrap: nowrap;
+		justify-content: space-evenly;
+		align-items: center;
+		flex-direction: row;
+		align-content: center;
+	}
+	img.adobestock-463404305-2-icon,img.steps-content-child,img.image-icon {
+		max-width:100%;
+		width: 100%;
+	}
+    .page-hero .image-container {
+        width: 100%;
+    }
+	.scroll-container > div {
+		padding: 5px 10px;
+        border: 1px solid #333366;
+        border-radius: 8px;
+        margin: 10px;
+        background: #F9FCFF;
+        font-size: 18px;
+        line-height: 18px;
+	}
+	img.adobestock-613750327-icon {
+		display:none;
+	}
+	img.mobile-person {
+		display:block;
+		margin: 0 auto;
+	}
+}
+
+
+		.holiday-callout {
+    background: #F1F5F9;
+    padding: 30px 0 0 0;
+    display: flex;
+    gap: 50px;
+    justify-content: center;
+    position: relative;
+}
+
+.holiday-callout a.button--primary {
+    background: #F1F5F9;
+    color:#333366;
+    padding: 10px 20px;
+    border-radius: 5px;
+    border: 1px solid #333366;
+    font-size: 18px;
+    line-height: 20px;
+    font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    text-decoration: none;
+	display: block;
+    min-width: 275px;
+    text-align: center;
+    margin-top: 12px;
+    margin-bottom: 32px;
+}
+.holiday-callout a.button--primary:hover,.holiday-callout a.button--primary:focus {
+    background-color: #ffffff;
+}
+
+.holiday-callout h3.header-3 {
+    font-size: 28px;
+    line-height: 32px;
+    text-align:center;
+    font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.holiday-callout .holiday-content {
+    display: flex;
+    flex-wrap: nowrap;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    margin-top:30px;
+}
+
+.holiday-callout .holiday-content p {
+ 	padding:0;
+  margin:0;
+}
+  
+  .holiday-callout .holiday-content p a {
+    font-size: 18px;
+    line-height: 22px;
+}
+
+@media (max-width: 767.98px){
+    .holiday-callout {
+    flex-wrap: wrap-reverse;
+        gap:15px;
+    }
+}

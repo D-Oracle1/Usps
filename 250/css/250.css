@@ -1,0 +1,1057 @@
+/*************************************/
+/********** 250th Anniversary ********/
+/*************************************/
+ 
+
+a:focus {
+    outline: 2px solid #668BE8 !important;
+    box-shadow: none !important;
+    outline-offset: 3px;
+  	border-radius: 3px;
+}
+
+.navbar-toggler:focus {
+    box-shadow: none;
+}
+
+
+[aria-expanded~="true"] span.navbar-toggler-icon {
+    background: url(https://www.usps.com/250/images/00_Navigation/CloseIcon.svg);
+}
+
+
+
+/* General */
+.thumbnail{
+    display: block;
+    margin: auto;
+    height: 114px;
+    margin-top: 40px;
+}
+.anniversary-page h2,
+.anniversary-page h2+p,
+.anniversary-page p+a.pointer-link{
+    display: block;
+    text-align: center;
+	line-height: normal;
+}
+h1,h2,h3,h4,h5{
+    font-family: Georgia, Times New Roman, Helvetica, Arial, sans-serif;
+    font-weight: 700;
+}
+h1{
+    font-size: 88px;
+    /* Delivering since */
+}
+h2{
+    font-size: 73px;
+    color: #112642;
+    /* general section header */
+}
+h3{
+    font-size: 64px;
+    color:#343434;
+    /* timeline footer*/
+}
+h4{
+    font-size: 32px;
+    color: #112642;
+    /* Section subheaders */
+}
+h5{
+    font-size: 22px;
+    color: #000000;
+    /* shop item header */
+}
+.h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 {
+	line-height: normal;
+}
+p,a{
+    font-family: "HelveticaNeueW02-75Bold" , "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 18px;
+    line-height: 100%;
+}
+.pointer-link{
+    color: #333366;
+    text-decoration: none;
+}
+.pointer-link::after{
+    content: "";
+    background-repeat: no-repeat;
+    background-image: url(https://www.usps.com/250/images/00_Navigation/CTA2_arrow-right-Default.svg);
+    display: inline-block;
+    background-size: 100%;
+    width: 13px;
+    height: 13px;
+    margin-left: 6px;
+    position: relative;
+    color: #333366;
+    vertical-align: unset;
+
+}
+a.pointer-link:hover::after{
+	background-image: url(https://www.usps.com/250/images/00_Navigation/CTA2_arrow-right-Hover.svg);
+    text-decoration: underline;
+}
+.pointer-link:hover{
+    text-decoration: underline;
+    color: #000000;
+}
+@media only screen and (max-width:991.98px) {
+    h1{
+        font-size: 32px;
+    }
+    h2{
+        font-size: 35px;
+    }
+    h3{
+        font-size: 32px;
+    }
+    h4{
+        font-size: 24px;
+    }
+    h5{
+        font-size: 22px;
+    }
+    .thumbnail{
+        height: 60px;
+    }
+    .did-you-know>.container,
+    .delivering-for-america>.container,
+    .happenings-at-usps>.container{
+        padding-right: 30px;
+        padding-left: 30px;
+    }
+}
+
+/* 250th CSS */
+.flag-bg{
+    background-color: rgba(53, 115, 177,50%);
+    background-image: url(../images/00_Navigation/LandingPage_Bg_01.jpg);
+    background-repeat: no-repeat;
+    background-size: cover;
+    width: 100%;
+    background-attachment: fixed;
+}
+.first-pmg.content-section,
+.did-you-know.content-section,
+.delivering-for-america.content-section,
+.happenings-at-usps.content-section{
+    margin-top: 40px;
+}
+
+/* Delivering since 1775 */
+.delivering-since{
+    background:  rgba(0, 96, 170, 50%);
+    border-bottom: 25px solid #ed192d;
+}
+.hero-image-container{
+    margin-left: -80px;
+    margin-right: -80px;
+    height: 100%;
+    max-height: 730px;
+    overflow: hidden;
+}
+.hero-image{
+    width: 100%;
+    display: none;
+    max-width: 950px;
+    width: 100%;
+    object-fit: contain;
+    object-position: bottom;
+    height: 100%;
+}
+.hero-image[data-carousel-default]{
+    display: block;
+}
+.ds-text{
+    padding: 10px;
+    font-size: 24px;
+    font-family: "HelveticaNeueW02-55Roma","Helvetica Neue",Helvetica,Arial,sans-serif;
+    color: #ffffff;
+    padding-top: 72px;
+}
+.anniversary-page h1{
+    color: #ffffff;   
+}
+.anniversary-page .ds-text h1 {
+    margin-bottom: 32px;
+}
+.ds-text p{
+    font-size: 20px;
+	font-family: "HelveticaNeueW02-55Roma","Helvetica Neue",Helvetica,Arial,sans-serif;
+	line-height: normal;
+}
+.ds-text p + p {
+    margin-bottom: 0px;
+    margin-top: 20px;
+}
+.block-link{
+    font-family: "HelveticaNeueW02-75Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    display: inline-block;
+    color: #ffffff;
+    background: #333366;
+    min-width: 160px;
+    text-align: center;
+    border-radius: 3px;
+    height: 44px;
+    text-decoration: none;
+    padding: 10px 20px;
+    border-style: none;
+    border: 1px solid #333366;
+    line-height: normal;
+}
+.block-link:hover{
+    background: #ededed;
+    color: #333366;
+    cursor: pointer;
+    border: 1px solid #ededed;
+}
+.ds-text .block-link {
+    margin-top: 32px;
+    font-family: "HelveticaNeueW02-75Bold" , "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.ds-text .block-link {
+    margin-top: 32px;
+}
+@media only screen and (min-width:991.98px) and (max-width:1200.98px) {
+    .anniversary-page .ds-text h1{
+        font-size: 87px;
+    }
+}
+@media only screen and (max-width:991.98px) {
+    .delivering-since{
+        border-bottom: none;
+    }
+    .ds-text{
+        border-bottom: 10px solid #ed192d;
+        background-color: #333366;
+        max-width: unset;
+        text-align: center;
+        font-size: 18px;
+        padding:28px 30px;
+    }
+    .block-link{
+        background-color: #FFFFFF;
+        color: #333366;
+    }
+    .delivering-since.content-section{
+        padding: 0px;
+    }
+    .hero-image-container{
+        margin-left: 0px;
+        margin-right: 0px;
+    }
+    .delivering-since>.container-lg>.row>.col-12:first-of-type{
+        padding: 0px;
+    }
+    .anniversary-page .ds-text h1{
+        margin-bottom: 16px;
+    }
+    .ds-text p{
+        font-size: 18px;
+    }
+    .ds-text p + p{
+        margin-top: 10px;
+    }
+    .ds-text .block-link{
+        margin-top: 16px;
+    }
+}
+
+/* First PMG */
+.floating-img-container{
+    position: relative;
+    background-color: #E3E2E3;
+}
+.pmg-image{
+    background-color: #ffffff;
+    max-width: 100%;
+    width: 100%;
+    object-fit: cover;
+}
+.pmg-image-mobile{
+    display: none;
+    max-width: 100%;
+    object-fit: cover;
+    height: 484px;
+}
+.pmg-side-content{
+    position: absolute;
+    top: 0px;
+    left: 44%;
+    max-width: 50%;
+    padding: 0px 0px 0px 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    justify-items: center;
+    height: 100%;
+}
+
+.pmg-side-content>h4{
+    width: 100%;
+	margin-bottom: 20px;
+}
+.pmg-side-content p {
+    font-family: "HelveticaNeueW02-55Roma","Helvetica Neue",Helvetica,Arial,sans-serif;
+	line-height: normal;
+}
+@media only screen and (max-width:1200.98px) {
+    .pmg-side-content>h4{
+        margin-bottom: 15px;
+    }
+    .first-pmg>.container-lg{
+        max-width: 1140px;
+    }
+    .pmg-side-content{        
+        left: 42%;
+        max-width: 56%;
+        padding: 0px 0px 0px 60px;
+    }
+}
+@media only screen and (max-width:991.98px) {
+    .first-pmg.content-section{
+        margin-top: 0px;
+        padding:0px;
+    }
+    .first-pmg>.container-lg{
+        padding-left: 0px;
+        padding-right: 0px;
+     }
+    .first-pmg>.container-lg>.row{ 
+        margin-left: 0px;
+        margin-right: 0px;
+    }
+    .first-pmg>.container-lg>.row>.col-12{
+        padding-left: 0px;
+        padding-right: 0px;
+    }
+    .pmg-image{
+        display: none;
+    }
+    .pmg-image-mobile{
+        display: block;
+    }
+    .pmg-side-content{
+        position: relative;
+        text-align: center;
+        max-width: unset;
+        left: unset;
+        background-color: #E3E2E3;
+        padding: 35px 30px;
+    }
+}
+
+/* Did You Know? */
+.did-you-know .dyk-facts{
+    margin-top: 45px;
+	padding-top: 0px;
+}
+.did-you-know .dyk-facts .row{
+    background-color: rgba(255,255,255,.5);
+    margin-bottom: 20px;
+}
+.did-you-know .dyk-facts .row:last-of-type{
+    margin-bottom: 0px;
+}
+.did-you-know .dyk-image{
+    max-width: 100%;
+    padding:0px;
+  	object-fit: unset;
+    /* object-fit: cover; */
+    height: 100%;
+    width: 100%;
+}
+.col-12.col-lg-6.dyk-image-container{
+    padding: 0px;
+    display: block;
+}
+.dyk-facts .col-12{
+    padding: 40px 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.dyk-thumbnail{
+	width: 80px;
+}
+.dyk-facts h4 {
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+#did-you-know-section h2 {
+    margin-top: 12px;
+    font-size: 64px;
+	margin-bottom: 12px;
+}
+#did-you-know-section p {
+	margin-bottom: 12px;
+    font-family: "HelveticaNeueW02-55Roma","Helvetica Neue",Helvetica,Arial,sans-serif;
+    line-height: normal;
+}
+@media only screen and (max-width:991.98px) {
+    .did-you-know.content-section{
+        margin-top: 0px;
+    }
+    .did-you-know .dyk-facts .row{
+        background-color: rgba(255,255,255,.5);
+        margin-bottom: 0px;
+        margin-top: 25px;
+    }
+    .dyk-facts .col-12{
+        order: 1;
+        padding: 35px 15px;
+    }
+    .dyk-facts .col-12.dyk-image-container{
+        padding: 0px;
+        order: 0;
+    }
+    .dyk-image{
+        display: block;
+    }
+    .did-you-know .dyk-facts{
+        text-align: center;
+        padding-top: 40px;
+        margin-top: 0px;
+    }
+    #did-you-know-section h2{
+        font-size: 32px;
+        margin-bottom: 12px;
+    }
+    #did-you-know-section p{
+        margin-bottom: 12px;
+    }
+}
+
+/* Delivering For America */
+.delivering-for-america.content-section p{
+    margin-left: 120px;
+    margin-right: 120px;
+}
+#delivering-for-section h2, #whats-happening-section h2, .shopping-header-container h2, .history-header-container h2 {
+    font-size: 64px;
+	margin-top: 12px;
+}
+#delivering-for-section h2{
+    margin-bottom: 12px;
+}
+#delivering-for-section p {
+    margin-bottom: 12px;
+	font-family: "HelveticaNeueW02-65Medi","Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+#delivering-for-section a, .history-header-container a {
+    font-size: 16px;
+}
+#whats-happening-section h2 {
+    margin-bottom: 0px;
+	padding-bottom: 20px;
+}
+@media only screen and (max-width:991.98px) {
+    .delivering-for-america.content-section{
+        margin-top: 0px;
+    }
+    .delivering-for-america.content-section p{
+        margin-left: 0px;
+        margin-right: 0px;
+    }
+    #delivering-for-section h2, #whats-happening-section h2, .shopping-header-container h2, .history-header-container h2{
+        font-size: 32px;
+    }
+}
+
+/* What's happening at USPS */
+.happenings-list{
+    text-align: center;
+    margin-top: 29px;
+}
+.happenings-list span{
+    font-family: "HelveticaNeueW02-75Bold" , "Helvetica Neue", Helvetica, Arial, sans-serif;
+    display: inline-block;
+    margin-bottom: 6px;
+}
+.happenings-at-usps .row .row{
+    background-color: rgba(255,255,255,.5);
+    margin-bottom: 29px;
+}
+.happenings-at-usps .row .row:last-of-type{
+    margin-bottom: 0px;
+}
+.happenings-at-usps .row .row>.col-12{
+    padding:80px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.happenings-at-usps .row .row>.col-12.ha-image-container{
+    padding:0px;
+}
+.ha-image-container{
+    padding:0px;
+}
+.ha-image-container img{
+    max-width: 100%;
+    width: 100%;
+	min-width: 0;
+}
+.happenings-list h4 {
+    font-family: Georgia, Times New Roman, Helvetica, Arial, sans-serif;
+    margin-bottom: 0px;
+}
+.happenings-list p {
+    margin-top: 12px;
+	margin-bottom: 12px;
+	font-family: "HelveticaNeueW02-55Roma","Helvetica Neue",Helvetica,Arial,sans-serif;
+	line-height: normal;
+}
+.happenings-list a {
+    font-size: 16px;
+}
+@media only screen and (max-width:991.98px) {
+    .happenings-at-usps .row .row>.col-12{
+        padding: 30px 20px;
+    }
+    .happenings-at-usps .col-12.ha-image-container{
+        order: 0;
+        padding:0px;
+    }
+    .happenings-at-usps .col-12{
+        order: 1;
+    }
+}
+
+
+
+/* Shop USPS */
+
+.shop-usps.content-section {
+	margin-top: 40px;
+}
+
+.shopping-items-container {
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: row;
+    justify-content: center;
+	padding-top: 24px;
+}
+
+.shop-item-contents {
+	flex-direction: column;
+	align-items: center;
+} 
+
+.shop-item-container {
+    width: 269px;
+    height: auto;
+    margin: 21px 11px 0px 11px;
+}
+
+.shop-item-btn, .shop-item-btn:hover {
+    text-decoration: none;
+    color: #000000;
+}
+
+.shop-item-btn img {
+    text-decoration: none;
+    width: 245px;
+    height: auto;
+}
+
+.button-image-container {
+    position: relative;
+}
+
+.button-text-container {
+    text-align: center;
+    padding: 20px;
+    margin-top: 6px;
+    max-width: 240px;
+}
+
+.shop-item-btn img.thumbnail-back {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    opacity: 0;
+    transition: all 0.01s ease;
+}
+
+.shop-item-btn:hover img.thumbnail-front,.shop-item-btn:focus img.thumbnail-front {
+	opacity: 0;
+} 
+
+.shop-item-btn:hover img.thumbnail-back, .shop-item-btn:focus img.thumbnail-back {
+	opacity: 1;
+}
+
+.shop-item-contents .shop-item-name {
+    font-size: 22px;
+    line-height: normal;
+}
+
+.shop-item-contents p {
+    margin-bottom: 0px;
+}
+
+.shop-item-contents .shop-item-price {
+    font-size: 20px;
+    font-family: "HelveticaNeueW02-55Roma","Helvetica Neue",Helvetica,Arial,sans-serif;
+    margin-top: 4px;
+}
+
+
+@media only screen and (max-width: 991.98px) {
+
+	.shopping-items-container {
+	    flex-direction: column;
+	    justify-content: center;
+		align-items: center;
+	}
+
+	.button-text-container {
+	    margin-top: 0px;
+	}
+
+	.shop-usps .container,
+	.our-history-container .container {
+		padding-left: 30px !important;
+		padding-right: 30px !important;
+	}
+
+	.shop-usps .col-12, .did-you-know.second-instance .col-12,
+	.our-history-container .col-12 {
+		padding-left: 0px !important;
+		padding-right: 0px !important;
+	}
+
+}
+
+
+
+/* Did You Know Second Block */
+
+.did-you-know.second-instance.content-section {
+	margin-bottom: 45px;
+	margin-top: 45px;
+}
+
+.did-you-know.second-instance.content-section .dyk-facts {
+	padding-top: 0px;
+	margin-top: 0px;
+}
+
+.did-you-know.second-instance h4 {
+	margin-top: 0px;
+	margin-bottom: 0px;
+}
+
+.did-you-know.second-instance.content-section p {
+    margin-top: 12px;
+	margin-bottom: 12px;
+	font-family: "HelveticaNeueW02-55Roma","Helvetica Neue",Helvetica,Arial,sans-serif;
+	line-height: normal;
+}
+.did-you-know.second-instance.content-section a {
+    font-size: 16px;
+}
+
+.did-you-know.second-instance .col-12 {
+	padding: 0px;
+}
+
+.dyk-content-block {
+	padding: 40px 48px;
+	background: rgb(255, 255, 255, 0.50);
+}
+
+.coffee-table-content {
+	display: flex;
+	justify-content: center;
+}
+
+
+@media only screen and (max-width: 991.98px) {
+		
+	.coffee-table-content {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
+
+	.dyk-image-block, .dyk-content-block {
+		width: 100%;
+		max-width: 330px;
+		height: auto;
+	}
+	
+	.dyk-content-block {
+		padding: 40px 48px;
+		background: rgb(255, 255, 255, 0.50);
+	}
+
+}
+
+
+@media only screen and (min-width: 992px) {
+	
+	.coffee-table-content p+a.pointer-link {
+		text-align: left;
+	}
+
+	.dyk-content-block {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+	}
+	
+	.dyk-image-block, .second-instance .dyk-image-block img,
+	.dyk-content-block {
+		max-width: 570px;
+		height: auto;
+	}
+	
+}
+
+
+
+/* History */
+
+.history-link-container {
+	padding-top: 10px;
+}
+
+.our-history-container a.inline-link {
+    text-decoration: none;
+    color: #333366;
+    font-size: 16px;
+}
+
+.our-history-container a.inline-link:hover {
+    color: #000000;
+}
+
+.our-history-container a.inline-link::after {
+	content:'';
+	background: url(https://www.usps.com/250/images/00_Navigation/CTA2_arrow-right-Default.svg) 0 0 no-repeat;
+	display: inline-block;
+	width: 13px;
+	height: 13px;
+	margin-left: 6px;
+}
+
+.our-history-container a.inline-link:hover::after{
+	background: url(https://www.usps.com/250/images/00_Navigation/CTA2_arrow-right-Hover.svg) 0 0 no-repeat;
+    text-decoration: underline;
+}
+
+.history-header-container, .closing-message h2 {
+	text-align: center;
+}
+
+.our-history-container a.inline-link:hover {
+    text-decoration: underline;
+}
+
+.our-history-container {
+    width: 100%;
+    background-color: #ffffff;
+}
+
+.our-history-container .col-12.content-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.timeline-container {
+    padding-top: 0px;
+}
+
+.closing-contents-container .text-content-container {
+	padding-top: 0px;
+}
+
+.timeline-image {
+    display: block;
+    margin: auto;
+    width: 560px;
+    height: auto;
+}
+
+.timeline-image, .closing-image {
+    display: block;
+    margin: auto;
+}
+
+.closing-image {
+	width: 360px;
+	height: auto;
+}
+
+.text-content-container, .border-content-container {
+    display: flex;
+	flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.border-content-container {
+    padding-top: 45px;
+}
+
+.history-header-container {
+    margin-bottom: 20px;
+}
+
+.history-header-container a {
+	margin-top: 12px;
+}
+
+.image-container img {
+    width: 100%;
+	height: auto;
+}
+
+.details-container {
+    padding: 25px 25px 25px 20px;
+}
+
+.image-container {
+    padding: 25px 15px 25px 25px;
+}
+
+.details-container {
+    display: flex;
+}
+
+.details-container h2 {
+    font-size: 80px;
+    margin-bottom: 13px;
+	color: #112642;
+}
+
+.details-container p {
+    font-size: 22px;
+    margin-bottom: 13px;
+	font-family: "HelveticaNeueW02-55Roma","Helvetica Neue",Helvetica,Arial,sans-serif;
+	color: #1A1A1A;
+}
+
+.closing-message h2 {
+	color: #343434;
+    font-size: 64px;
+    margin-top: 45px;
+}
+
+.closing-message h2 span {
+	color: #343434;
+    font-size: 54px;
+}
+
+.solid-border {
+    background:  #ED192D;
+    width: 250px;
+    height: 10px;
+}
+
+.col-12.closing-image-container {
+	padding-top: 45px;
+}
+
+.back-to-top a.inline-link {
+    text-decoration: none;
+    color: #333366;
+    font-size: 16px;
+}
+
+.back-to-top a.inline-link:hover {
+    text-decoration: none;
+}
+
+.top-btn-container {
+	padding-top: 10px;
+}
+
+.back-to-top img.thumbnail-back {
+    position: relative;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    transition: all 0.01s ease; 
+}
+
+.text-content-container.back-to-top {
+    padding-top: 45px;
+}
+
+.back-to-top a.back-to-top-btn {
+    text-decoration: none;
+    color: #333366;
+    font-size: 16px;
+	line-height: normal;
+}
+
+.back-to-top p {
+	margin-bottom: 0px;
+	font-size: 16px;
+}
+
+.back-to-top a.back-to-top-btn:hover {
+    text-decoration: none;
+}
+
+.back-to-top .button-image-container {
+    position: relative;
+    width: 39px;
+    height: auto;
+}
+
+.back-to-top .link-contents-container {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.back-to-top img {
+    text-decoration: none;
+    width: 39px;
+	height: 27px;
+}
+
+.back-to-top img.thumbnail-back {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    transition: all 0.01s ease; 
+}
+
+.back-to-top-btn:hover .link-contents-container img.thumbnail-front,
+.back-to-top-btn:focus .link-contents-container img.thumbnail-front {
+	opacity: 0;
+} 
+
+.back-to-top-btn:hover .link-contents-container img.thumbnail-back,
+.back-to-top-btn:focus .link-contents-container img.thumbnail-back {
+	opacity: 1;
+}
+
+
+@media only screen and (max-width: 991.98px) {
+
+	.image-container, .details-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
+	
+    .details-container {
+        width: 137px;
+		height: auto;
+		margin: auto;
+    }
+
+	.timeline-image {
+		width: 100%;
+		max-width: 390px;
+	}
+
+	.timeline-container {
+	    padding-top: 20px;
+	}
+	
+	.closing-image {
+	    width: 184px;
+	}
+
+	.our-history-container h2,
+	.our-history-container h2 + p,
+	.our-history-container p + a.pointer-link {
+	    display: block;
+	    text-align: center;
+	}
+
+	.details-container {
+	    padding-top: 0px;
+		padding-bottom: 0px;
+	}
+
+	.image-container {
+		padding-bottom: 0px;
+	}
+
+	.image-container img {
+	    max-width: 330px;
+	}
+	
+	.details-container h2 {
+		font-size: 32px;
+		margin-top: 10px;
+	    margin-bottom: 13px;
+	}
+	
+	.closing-message h2 {
+		font-size: 40px;
+		line-height: normal;
+		margin-top: 20px;
+	}
+
+	.closing-message h2 span {
+		font-size: 30px;
+	}
+
+	.closing-message {
+		width: 100%;
+		max-width: 340px;
+		height: auto;
+	}
+
+	.details-container p.history-subtext {
+		font-size: 16px;
+		line-height: 19px;
+		margin-bottom: 0px;
+	}
+
+	.col-12.closing-image-container, .text-content-container.back-to-top {
+		padding-top: 39px;
+	}
+
+	.border-content-container {
+		padding-top: 20px;
+	}
+	
+	.closing-contents-container {
+		background: linear-gradient(180deg, #FFF 45.57%, rgba(227, 230, 224, 0.87) 100%);
+		padding-bottom: 40px;
+	}
+}
+
+@media only screen and (min-width: 992px) {
+
+	.our-history-container .two-block-content h2,
+	.our-history-container .two-block-content h2 + p,
+	.our-history-container .two-block-content p + a.pointer-link{
+	    display: block;
+	    text-align: left;
+	}
+	
+    .details-container {
+        flex-direction: column;
+        justify-content: center;
+		max-width: 530px;
+    }
+	
+	.closing-message {
+		width: 100%;
+		max-width: 580px;
+	}
+	
+	.closing-contents-container {
+		background: linear-gradient(180deg, #FFF 0%, #E3E6E0 75%);
+		padding-bottom: 40px;
+	}
+
+}

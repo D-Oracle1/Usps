@@ -1,0 +1,99 @@
+/*
+        Styling for html elements accross all major browsers is reset.
+*/
+
+html, body, ul, ol, dl, li, dt, dd, h1, h2, h3, h4, h5, h6, pre, form, p, blockquote, fieldset, input, iframe, table, tr, th, td, caption {
+        padding: 0;
+        margin: 0;
+        font-family:Arial;
+}
+:focus{
+        outline:0;
+}
+:link, :visited {
+        text-decoration: none;
+}
+ul, ol {
+        list-style: none;
+}
+.scrollInterior ul {
+    list-style: disc outside none !important;
+    padding-left: 15px !important;
+}
+.scrollInterior ol {
+    list-style: decimal outside none !important;
+    padding-left: 22px !important;
+}
+h1, h2, h3, h4, h5, h6, pre, code, p {
+        font-size: 1em;
+        line-height: 1;
+}
+a img, :link img, :visited img {
+        border: none;
+}
+table {
+        border-collapse: collapse;
+        border-spacing: 0;
+}
+address {
+        font-style: normal;
+}
+sup { 
+        position: relative;
+        top: -3px;
+        vertical-align: top;
+        font-size:90%;
+}
+
+.dj_gecko  h2 sup {
+	top: 6px;
+	 vertical-align: none;
+} 
+
+.dj_ie h2 sup, .dj_safari h2 sup {
+	top: -3px;
+	vertical-align: top;
+}
+#faq-link h2 sup{top:-6px;}
+.page-intro h1 sup {
+    font-size: 60%;
+    line-height: 1.5em;
+}
+#page-intro #hdrbody ul, #page-intro #subhdrbody ul {
+	margin-left: 25px; 
+	list-style: disc outside none;
+	padding-bottom: 10px; 
+}
+#page-intro #hdrbody ul  li{
+	padding-left: 5px;
+}
+#page-intro #hdrbody ol, #page-intro #subhdrbody ol {
+	margin-left: 28px; 
+	list-style: decimal outside none;
+	padding-bottom: 10px;
+} 
+#page-intro #hdrbody ul, #page-intro #hdrbody ol, #page-intro #subhdrbody ol, #page-intro #subhdrbody ul{
+	font-size:11px; 
+}
+
+.callout-right-rail{
+	width:234px;
+	padding-bottom:185px;
+}
+ 
+/* Start Fix TinyMCE - Internal Only */
+body#tinymce p {
+margin-bottom: 10px;
+}
+
+body#tinymce ul {
+list-style-type: disc;
+padding-left: 20px;
+}
+
+body#tinymce ol {
+list-style-type: decimal;
+padding-left: 23px;
+}
+
+/* End Fix TinyMCE - Internal Only */
