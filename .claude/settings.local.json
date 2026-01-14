@@ -4,7 +4,30 @@
       "Bash(vercel --version:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(vercel)",
+      "Bash(vercel:*)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma init)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --no-src-dir --import-alias \"@/*\")",
+      "Bash(npm run start:dev:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npx prisma dev)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(ping:*)",
+      "Bash(nslookup:*)",
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "WebFetch(domain:www.usps.com)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(kill:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(railway:*)"
     ]
   }
 }
