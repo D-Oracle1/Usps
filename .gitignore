@@ -1,0 +1,40 @@
+# Vercel
+.vercel
+
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temp files
+tmpclaude-*
+*.tmp
+
+# Database
+*.db
+*.sqlite
+
+# Prisma
+prisma/*.db

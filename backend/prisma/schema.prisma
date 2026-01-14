@@ -1,0 +1,138 @@
+// Courier Tracking System - Prisma Schema
+// Real-time shipment tracking with admin controls
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Admin User Model
+model AdminUser {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  role          UserRole @default(ADMIN)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  trackingEvents       TrackingEvent[]
+  pausedShipments      ShipmentMovementState[] @relation("PausedBy")
+
+  @@map("admin_users")
+}
+
+// Shipment Model - Core entity
+model Shipment {
+  id                  String   @id @default(uuid())
+  trackingNumber      String   @unique @map("tracking_number")
+  originLocation      String   @map("origin_location")
+  destinationLocation String   @map("destination_location")
+  currentStatus       ShipmentStatus @default(PENDING) @map("current_status")
+  currentLocation     String?  @map("current_location")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Package details
+  goodsDescription    String?  @map("goods_description")
+  packageWeight       Float?   @map("package_weight")
+  packageDimensions   String?  @map("package_dimensions")
+  declaredValue       Float?   @map("declared_value")
+  serviceType         String?  @map("service_type")
+
+  // Sender info
+  senderName          String?  @map("sender_name")
+  senderPhone         String?  @map("sender_phone")
+  senderEmail         String?  @map("sender_email")
+
+  // Recipient info
+  recipientName       String?  @map("recipient_name")
+  recipientPhone      String?  @map("recipient_phone")
+  recipientEmail      String?  @map("recipient_email")
+
+  // Special instructions
+  specialInstructions String?  @map("special_instructions")
+
+  // Relations
+  trackingEvents      TrackingEvent[]
+  locations           ShipmentLocation[]
+  movementState       ShipmentMovementState?
+
+  @@index([trackingNumber])
+  @@map("shipments")
+}
+
+// Tracking Event Model - Permanent event timeline
+model TrackingEvent {
+  id          String   @id @default(uuid())
+  shipmentId  String   @map("shipment_id")
+  status      String
+  description String
+  location    String
+  eventTime   DateTime @map("event_time")
+  createdBy   String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  shipment    Shipment   @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  admin       AdminUser? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([shipmentId])
+  @@index([eventTime])
+  @@map("tracking_events")
+}
+
+// Shipment Location Model - Real-time GPS stream
+model ShipmentLocation {
+  id         String   @id @default(uuid())
+  shipmentId String   @map("shipment_id")
+  latitude   Float
+  longitude  Float
+  speed      Float?   @default(0)
+  heading    Float?   @default(0)
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  // Relations
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, recordedAt])
+  @@map("shipment_locations")
+}
+
+// Shipment Movement State - Admin control for pause/resume
+model ShipmentMovementState {
+  id         String    @id @default(uuid())
+  shipmentId String    @unique @map("shipment_id")
+  isMoving   Boolean   @default(true) @map("is_moving")
+  pausedBy   String?   @map("paused_by")
+  pausedAt   DateTime? @map("paused_at")
+  resumedAt  DateTime? @map("resumed_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  shipment   Shipment   @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  pausedByAdmin AdminUser? @relation("PausedBy", fields: [pausedBy], references: [id], onDelete: SetNull)
+
+  @@map("shipment_movement_states")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  SUPER_ADMIN
+  VIEWER
+}
+
+enum ShipmentStatus {
+  PENDING
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+  CANCELLED
+}

@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* Mapbox GL CSS */
+@import 'mapbox-gl/dist/mapbox-gl.css';
+
+:root {
+  /* USPS Official Colors */
+  --usps-navy: #333366;
+  --usps-navy-dark: #1a1a4e;
+  --usps-red: #cc0000;
+  --usps-red-dark: #990000;
+  --usps-blue: #336699;
+  --usps-light-blue: #0066cc;
+  --usps-light-gray: #f5f5f5;
+  --usps-gray: #e0e0e0;
+  --usps-dark-gray: #666666;
+}
+
+body {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}

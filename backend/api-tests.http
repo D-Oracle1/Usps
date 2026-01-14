@@ -1,0 +1,212 @@
+### Courier Tracking System - API Tests
+### Use with REST Client extension in VS Code or import to Postman
+
+@baseUrl = http://localhost:3000
+@token = YOUR_JWT_TOKEN_HERE
+
+### ============================================
+### AUTHENTICATION
+### ============================================
+
+### Register Admin User
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test Admin",
+  "email": "admin@example.com",
+  "password": "secure-password-123",
+  "role": "ADMIN"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "secure-password-123"
+}
+
+### Get Profile
+GET {{baseUrl}}/auth/profile
+Authorization: Bearer {{token}}
+
+### ============================================
+### SHIPMENTS
+### ============================================
+
+### Create Shipment
+# @name createShipment
+POST {{baseUrl}}/shipments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "trackingNumber": "TRACK123456789",
+  "originLocation": "New York, NY 10001",
+  "destinationLocation": "Los Angeles, CA 90001",
+  "currentStatus": "PENDING"
+}
+
+### List All Shipments (with pagination)
+GET {{baseUrl}}/shipments?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### Get Shipment Statistics
+GET {{baseUrl}}/shipments/statistics
+Authorization: Bearer {{token}}
+
+### Get Shipment by ID
+GET {{baseUrl}}/shipments/YOUR_SHIPMENT_ID
+Authorization: Bearer {{token}}
+
+### Get Shipment by Tracking Number (Public)
+GET {{baseUrl}}/shipments/tracking/TRACK123456789
+
+### Update Shipment
+PATCH {{baseUrl}}/shipments/YOUR_SHIPMENT_ID
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "currentStatus": "IN_TRANSIT",
+  "currentLocation": "Philadelphia, PA"
+}
+
+### Delete Shipment
+DELETE {{baseUrl}}/shipments/YOUR_SHIPMENT_ID
+Authorization: Bearer {{token}}
+
+### ============================================
+### TRACKING EVENTS
+### ============================================
+
+### Create Tracking Event
+POST {{baseUrl}}/tracking/events
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "shipmentId": "YOUR_SHIPMENT_ID",
+  "status": "PICKED_UP",
+  "description": "Package picked up from sender",
+  "location": "New York, NY 10001",
+  "eventTime": "2024-01-15T10:30:00Z"
+}
+
+### Add Another Event - In Transit
+POST {{baseUrl}}/tracking/events
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "shipmentId": "YOUR_SHIPMENT_ID",
+  "status": "IN_TRANSIT",
+  "description": "Package departed from New York facility",
+  "location": "New York Distribution Center",
+  "eventTime": "2024-01-15T14:00:00Z"
+}
+
+### Add Another Event - Out for Delivery
+POST {{baseUrl}}/tracking/events
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "shipmentId": "YOUR_SHIPMENT_ID",
+  "status": "OUT_FOR_DELIVERY",
+  "description": "Out for delivery",
+  "location": "Los Angeles, CA 90001",
+  "eventTime": "2024-01-16T08:00:00Z"
+}
+
+### Get Timeline by Shipment ID
+GET {{baseUrl}}/tracking/timeline/YOUR_SHIPMENT_ID
+Authorization: Bearer {{token}}
+
+### Get Public Timeline by Tracking Number
+GET {{baseUrl}}/tracking/public/TRACK123456789
+
+### ============================================
+### MOVEMENT CONTROL (Pause/Resume)
+### ============================================
+
+### Pause Shipment Movement
+POST {{baseUrl}}/movement/YOUR_SHIPMENT_ID/pause
+Authorization: Bearer {{token}}
+
+### Resume Shipment Movement
+POST {{baseUrl}}/movement/YOUR_SHIPMENT_ID/resume
+Authorization: Bearer {{token}}
+
+### Get Movement State
+GET {{baseUrl}}/movement/YOUR_SHIPMENT_ID/state
+Authorization: Bearer {{token}}
+
+### Get Movement History (Pause/Resume Audit Log)
+GET {{baseUrl}}/movement/YOUR_SHIPMENT_ID/history
+Authorization: Bearer {{token}}
+
+### ============================================
+### LOCATION DATA
+### ============================================
+
+### Record Location (Manual)
+POST {{baseUrl}}/locations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "shipmentId": "YOUR_SHIPMENT_ID",
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "speed": 55.5,
+  "heading": 180.0
+}
+
+### Record Another Location
+POST {{baseUrl}}/locations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "shipmentId": "YOUR_SHIPMENT_ID",
+  "latitude": 40.7589,
+  "longitude": -73.9851,
+  "speed": 60.0,
+  "heading": 185.0
+}
+
+### Get All Locations for Shipment
+GET {{baseUrl}}/locations/YOUR_SHIPMENT_ID?limit=100
+Authorization: Bearer {{token}}
+
+### Get Latest Location
+GET {{baseUrl}}/locations/YOUR_SHIPMENT_ID/latest
+Authorization: Bearer {{token}}
+
+### ============================================
+### TESTING WORKFLOW EXAMPLE
+### ============================================
+
+# 1. Register a new admin user (first request above)
+# 2. Login to get JWT token
+# 3. Copy the access_token from response and replace {{token}} above
+# 4. Create a shipment
+# 5. Copy the shipment ID from response
+# 6. Add tracking events
+# 7. Test pause/resume
+# 8. Record some locations
+# 9. View timeline and locations
+
+### ============================================
+### NOTES
+### ============================================
+
+# - Replace YOUR_SHIPMENT_ID with actual shipment UUID
+# - Replace YOUR_JWT_TOKEN_HERE with token from login
+# - Use the @name comments to capture responses
+# - Public endpoints don't require authentication
+# - Admin endpoints require Bearer token
