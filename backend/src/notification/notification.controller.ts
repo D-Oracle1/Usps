@@ -18,6 +18,18 @@ export class NotificationController {
       currentLocation: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      goodsDescription: null,
+      packageWeight: null,
+      packageDimensions: null,
+      declaredValue: null,
+      serviceType: null,
+      senderName: null,
+      senderPhone: null,
+      senderEmail: null,
+      recipientName: null,
+      recipientPhone: null,
+      recipientEmail: null,
+      specialInstructions: null,
     };
 
     const success = await this.notificationService.sendShipmentCreatedEmail(
