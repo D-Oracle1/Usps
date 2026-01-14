@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { defineConfig } from 'prisma/config';
 
-const DATABASE_URL = 'postgresql://postgres:Consignment1245@db.rejdfspkwefgckosopsk.supabase.co:5432/postgres';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/usps';
 
 export default defineConfig({
   earlyAccess: true,
