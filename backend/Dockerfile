@@ -39,5 +39,5 @@ COPY --from=builder /app/dist ./dist
 # Expose port
 EXPOSE 3000
 
-# Start the application
-CMD ["node", "dist/main.js"]
+# Start script: run migrations then start the app
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/main.js"]
