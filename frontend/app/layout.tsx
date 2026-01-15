@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import 'leaflet/dist/leaflet.css'
 import { AuthProvider } from '@/lib/auth-context'
+import { SupportAuthProvider } from '@/lib/support-auth-context'
+import ChatWidget from '@/components/support/ChatWidget'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,7 +22,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
-          {children}
+          <SupportAuthProvider>
+            {children}
+            <ChatWidget />
+          </SupportAuthProvider>
         </AuthProvider>
       </body>
     </html>

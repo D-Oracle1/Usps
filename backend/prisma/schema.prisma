@@ -20,11 +20,77 @@ model AdminUser {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Relations
-  trackingEvents       TrackingEvent[]
-  pausedShipments      ShipmentMovementState[] @relation("PausedBy")
-  addressChangeFees    AddressChangeFee[]
+  trackingEvents        TrackingEvent[]
+  pausedShipments       ShipmentMovementState[] @relation("PausedBy")
+  addressChangeFees     AddressChangeFee[]
+  assignedConversations Conversation[]
 
   @@map("admin_users")
+}
+
+// Support User Model - Customer accounts for chat
+model SupportUser {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  phone         String?
+  isOnline      Boolean   @default(false) @map("is_online")
+  lastSeenAt    DateTime? @map("last_seen_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  conversations Conversation[]
+  messages      Message[]
+
+  @@map("support_users")
+}
+
+// Conversation Model - Chat threads
+model Conversation {
+  id              String               @id @default(uuid())
+  supportUserId   String               @map("support_user_id")
+  trackingNumber  String?              @map("tracking_number")
+  subject         String?
+  status          ConversationStatus   @default(OPEN)
+  priority        ConversationPriority @default(NORMAL)
+  assignedAdminId String?              @map("assigned_admin_id")
+  lastMessageAt   DateTime?            @map("last_message_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  supportUser   SupportUser @relation(fields: [supportUserId], references: [id], onDelete: Cascade)
+  assignedAdmin AdminUser?  @relation(fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  messages      Message[]
+
+  @@index([supportUserId])
+  @@index([trackingNumber])
+  @@index([status])
+  @@map("conversations")
+}
+
+// Message Model - Individual chat messages
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String      @map("conversation_id")
+  senderId       String      @map("sender_id")
+  senderType     SenderType  @map("sender_type")
+  content        String
+  messageType    MessageType @default(TEXT) @map("message_type")
+  isRead         Boolean     @default(false) @map("is_read")
+  readAt         DateTime?   @map("read_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  supportUser  SupportUser? @relation(fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("messages")
 }
 
 // Shipment Model - Core entity
@@ -166,4 +232,32 @@ enum ShipmentStatus {
   DELIVERED
   FAILED
   CANCELLED
+}
+
+// Support Chat Enums
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum ConversationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum SenderType {
+  USER
+  ADMIN
+  SYSTEM
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
 }

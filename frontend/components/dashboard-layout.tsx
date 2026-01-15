@@ -3,12 +3,13 @@
 import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Package, BarChart3, LogOut, Menu, X, Home, Plus, Truck, Search, Bell, User, ChevronDown, MapPin } from 'lucide-react'
+import { Package, BarChart3, LogOut, Menu, X, Home, Plus, Truck, Search, Bell, User, ChevronDown, MapPin, MessageCircle } from 'lucide-react'
 import { useState } from 'react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Create Shipment', href: '/dashboard/shipments/new', icon: Plus },
+  { name: 'Support Chat', href: '/dashboard/support', icon: MessageCircle },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
 ]
 
@@ -175,6 +176,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-[#333366] font-medium">
               {pathname === '/dashboard' && 'Dashboard'}
               {pathname === '/dashboard/analytics' && 'Analytics'}
+              {pathname === '/dashboard/support' && 'Support Chat'}
               {pathname === '/dashboard/shipments/new' && 'Create Shipment'}
               {pathname.includes('/dashboard/shipments/') && !pathname.includes('/new') && !pathname.includes('/map') && 'Shipment Details'}
               {pathname.includes('/map') && 'Live Tracking'}
