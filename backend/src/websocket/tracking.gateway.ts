@@ -37,7 +37,14 @@ interface SimulationState {
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://usps-ten.vercel.app',
+      'https://www-usps-com.vercel.app',
+      /\.vercel\.app$/,
+      /\.up\.railway\.app$/,
+    ],
     credentials: true,
   },
   namespace: '/tracking',

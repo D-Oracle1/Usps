@@ -207,7 +207,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
   // WebSocket connection
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3000'
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001'
 
     socket.current = io(`${wsUrl}/tracking`, {
       auth: { token },
