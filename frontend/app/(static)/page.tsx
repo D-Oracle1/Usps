@@ -19,6 +19,46 @@ export default function HomePage() {
     '/track'
   )
 
+  // Update login/register links to point to our auth pages
+  htmlContent = htmlContent.replace(
+    /https:\/\/reg\.usps\.com\/entreg\/LoginAction_input[^"']*/g,
+    '/auth/login'
+  )
+
+  // Update location finder links
+  htmlContent = htmlContent.replace(
+    /https:\/\/tools\.usps\.com\/locations\/?/g,
+    '/locations'
+  )
+
+  // Update ZIP code lookup links
+  htmlContent = htmlContent.replace(
+    /https:\/\/tools\.usps\.com\/go\/ZipLookupAction_input/g,
+    '/zip-lookup'
+  )
+  htmlContent = htmlContent.replace(
+    /https:\/\/tools\.usps\.com\/zip-code-lookup\.htm/g,
+    '/zip-lookup'
+  )
+
+  // Update schedule pickup links
+  htmlContent = htmlContent.replace(
+    /https:\/\/tools\.usps\.com\/schedule-pickup-steps\.htm/g,
+    '/schedule-pickup'
+  )
+
+  // Update redelivery links
+  htmlContent = htmlContent.replace(
+    /https:\/\/tools\.usps\.com\/redelivery\.htm/g,
+    '/redelivery'
+  )
+
+  // Update search form actions to our search page
+  htmlContent = htmlContent.replace(
+    /action="https:\/\/www\.usps\.com\/search[^"]*"/g,
+    'action="/search"'
+  )
+
   // Fix asset paths to work with Next.js public folder
   htmlContent = htmlContent.replace(/href="assets\//g, 'href="/assets/')
   htmlContent = htmlContent.replace(/src="assets\//g, 'src="/assets/')
