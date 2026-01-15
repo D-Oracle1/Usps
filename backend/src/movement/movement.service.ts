@@ -142,7 +142,7 @@ const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
 
 @Injectable()
 export class MovementService {
-  private readonly AVERAGE_SPEED = 45; // km/h
+  private readonly AVERAGE_SPEED = 65; // km/h (realistic for delivery trucks)
 
   constructor(
     private prisma: PrismaService,
@@ -194,14 +194,26 @@ export class MovementService {
       return CITY_COORDINATES[normalized];
     }
 
-    // Check if any city name is contained in the location
-    for (const [city, coords] of Object.entries(CITY_COORDINATES)) {
+    // Check if any city name is contained in the location (prioritize longer matches)
+    const sortedCities = Object.entries(CITY_COORDINATES).sort(
+      (a, b) => b[0].length - a[0].length
+    );
+
+    for (const [city, coords] of sortedCities) {
       if (normalized.includes(city)) {
         return coords;
       }
     }
 
-    // Default to a random US location if not found
+    // Also check if location contains the city (reverse check)
+    for (const [city, coords] of sortedCities) {
+      if (city.includes(normalized)) {
+        return coords;
+      }
+    }
+
+    // Default to a central US location if not found
+    console.warn(`Location not found in database: "${location}", using default coordinates`);
     return { lat: 39.8283, lng: -98.5795 }; // Geographic center of US
   }
 
