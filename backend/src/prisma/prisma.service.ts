@@ -23,9 +23,9 @@ export class PrismaService
       ssl: {
         rejectUnauthorized: false,
       },
-      max: 5, // Limit connections for serverless
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
+      max: 20, // Higher limit for persistent server
+      idleTimeoutMillis: 60000,
+      connectionTimeoutMillis: 30000,
     });
 
     const adapter = new PrismaPg(pool);

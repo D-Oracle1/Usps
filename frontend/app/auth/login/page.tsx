@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Eye, EyeOff, Mail, MapPin, Stamp, Inbox, Pause, Calendar, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -19,7 +19,7 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      await login(username, password)
+      await login(email, password)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -53,7 +53,7 @@ export default function LoginPage() {
                 Sign in to Your<br />USPS.com Account
               </h1>
               <p className="text-sm text-gray-600 mb-6">
-                Your USPS.com account provides access to all of your applications and services on USPS.com. Usernames and Passwords are case sensitive.
+                Your USPS.com account provides access to all of your applications and services on USPS.com. Passwords are case sensitive.
               </p>
 
               {error && (
@@ -65,14 +65,14 @@ export default function LoginPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label htmlFor="username" className="block text-sm text-gray-700 mb-1">
-                    User Name
+                  <label htmlFor="email" className="block text-sm text-gray-700 mb-1">
+                    Email
                   </label>
                   <input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                     className="w-full px-3 py-2 border border-[#333366] rounded focus:outline-none focus:ring-2 focus:ring-[#333366]"
                   />
@@ -112,7 +112,7 @@ export default function LoginPage() {
 
               <div className="mt-4 space-y-1">
                 <Link href="#" className="block text-[#333366] text-sm hover:underline">
-                  Forgot your username?
+                  Forgot your email?
                 </Link>
                 <Link href="#" className="block text-[#333366] text-sm hover:underline">
                   Forgot your password?
