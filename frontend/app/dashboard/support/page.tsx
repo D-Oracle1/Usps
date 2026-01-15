@@ -47,7 +47,7 @@ export default function AdminSupportPage() {
   const [statistics, setStatistics] = useState<ChatStatistics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const typingTimeoutRef = useRef<NodeJS.Timeout>()
+  const typingTimeoutRef = useRef<NodeJS.Timeout>(null)
 
   // Load initial data
   useEffect(() => {
