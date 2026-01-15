@@ -33,6 +33,11 @@ interface SimulationState {
   isPaused: boolean;
   totalDistance: number;
   remainingDistance: number;
+  deliveryHours: number;
+  startTime: number;
+  pausedAt: number | null;
+  totalPausedTime: number;
+  subStep: number;
 }
 
 @WebSocketGateway({
@@ -219,10 +224,11 @@ export class TrackingGateway
       timestamp: new Date(),
     });
 
-    // Pause the simulation if running
+    // Pause the simulation if running and track pause time
     const simulation = this.activeSimulations.get(shipmentId);
     if (simulation) {
       simulation.isPaused = true;
+      simulation.pausedAt = Date.now();
     }
 
     this.logger.log(`Emitted intercept event for shipment: ${shipmentId}, reason: ${reason}`);
@@ -237,10 +243,17 @@ export class TrackingGateway
       timestamp: new Date(),
     });
 
-    // Resume the simulation if paused
+    // Resume the simulation if paused and calculate total paused time
     const simulation = this.activeSimulations.get(shipmentId);
     if (simulation) {
+      if (simulation.pausedAt) {
+        // Add the duration of this pause to total paused time
+        const pauseDuration = Date.now() - simulation.pausedAt;
+        simulation.totalPausedTime += pauseDuration;
+        this.logger.log(`Shipment ${shipmentId} was paused for ${Math.round(pauseDuration / 1000 / 60)} minutes. Total paused time: ${Math.round(simulation.totalPausedTime / 1000 / 60)} minutes`);
+      }
       simulation.isPaused = false;
+      simulation.pausedAt = null;
     }
 
     this.logger.log(`Emitted cleared event for shipment: ${shipmentId}, reason: ${reason}`);
@@ -308,7 +321,7 @@ export class TrackingGateway
     return remaining;
   }
 
-  // Start route-based simulation (Bolt-like movement)
+  // Start route-based simulation with real-time delivery based on estimated time
   startRouteSimulation(
     shipmentId: string,
     route: RoutePoint[],
@@ -326,6 +339,17 @@ export class TrackingGateway
     const calculatedDistance =
       totalDistance || this.calculateRouteDistance(route);
 
+    // Calculate timing based on delivery days - REAL TIME delivery
+    const deliveryHours = (deliveryDays || 1) * 24;
+    const totalSegments = route.length - 1;
+    const STEPS_PER_SEGMENT = 10; // Smooth interpolation between route points
+    const totalSteps = totalSegments * STEPS_PER_SEGMENT;
+
+    // Calculate interval to spread simulation across ACTUAL delivery period
+    // No speed factor - shipment moves in real time to complete in exactly deliveryDays
+    const totalSimulationMs = deliveryHours * 60 * 60 * 1000; // Actual delivery time in ms
+    const UPDATE_INTERVAL_MS = Math.max(1000, Math.floor(totalSimulationMs / totalSteps));
+
     const state: SimulationState = {
       interval: null as any,
       route,
@@ -333,26 +357,20 @@ export class TrackingGateway
       isPaused: false,
       totalDistance: calculatedDistance,
       remainingDistance: calculatedDistance,
+      deliveryHours,
+      startTime: Date.now(),
+      pausedAt: null,
+      totalPausedTime: 0,
+      subStep: 0,
     };
 
-    // Calculate timing based on delivery days
-    // deliveryDays determines how long the simulation takes
-    const deliveryHours = (deliveryDays || 1) * 24;
-    const totalSegments = route.length - 1;
-    const STEPS_PER_SEGMENT = 10; // Smooth interpolation between route points
-    const totalSteps = totalSegments * STEPS_PER_SEGMENT;
-
-    // Calculate interval to spread simulation across delivery period
-    // For realistic display, we accelerate the simulation but show realistic ETA
-    const SIMULATION_SPEED_FACTOR = 1000; // Simulation runs 1000x faster for demo
-    const totalSimulationMs = (deliveryHours * 60 * 60 * 1000) / SIMULATION_SPEED_FACTOR;
-    const UPDATE_INTERVAL_MS = Math.max(500, Math.floor(totalSimulationMs / totalSteps));
-
-    let subStep = 0;
+    this.logger.log(`Starting real-time simulation for shipment: ${shipmentId}`);
+    this.logger.log(`Delivery time: ${deliveryDays} days (${deliveryHours} hours)`);
+    this.logger.log(`Total steps: ${totalSteps}, Update interval: ${UPDATE_INTERVAL_MS}ms`);
 
     const interval = setInterval(async () => {
       try {
-        // Check if paused
+        // Check if paused - don't advance simulation
         if (state.isPaused) {
           return;
         }
@@ -371,16 +389,16 @@ export class TrackingGateway
         const nextPoint = route[nextIndex];
 
         // Interpolate between current and next point
-        const t = subStep / STEPS_PER_SEGMENT;
+        const t = state.subStep / STEPS_PER_SEGMENT;
         const interpolatedLat = currentPoint.lat + (nextPoint.lat - currentPoint.lat) * t;
         const interpolatedLng = currentPoint.lng + (nextPoint.lng - currentPoint.lng) * t;
 
         // Calculate speed and heading
         const heading = this.calculateHeading(currentPoint, nextPoint);
         const segmentDistance = this.calculateDistance(currentPoint, nextPoint);
-        const speed = (segmentDistance / (STEPS_PER_SEGMENT * UPDATE_INTERVAL_MS / 1000 / 3600)) * 1000; // Convert to m/s
+        const speed = calculatedDistance / deliveryHours; // Average speed in km/h
 
-        // Calculate remaining distance and ETA
+        // Calculate remaining distance
         const remainingDistance = this.calculateRemainingDistance(
           route,
           state.currentIndex,
@@ -389,14 +407,22 @@ export class TrackingGateway
         );
         state.remainingDistance = remainingDistance;
 
-        // Calculate ETA based on progress and original delivery time
-        const progressPercent = (state.currentIndex * STEPS_PER_SEGMENT + subStep) / totalSteps;
-        const remainingHours = deliveryHours * (1 - progressPercent);
-        const etaMinutes = remainingHours * 60;
+        // Calculate ETA based on elapsed time and paused time
+        // Time that has actually passed towards delivery (excluding paused time)
+        const elapsedMs = Date.now() - state.startTime - state.totalPausedTime;
+        const elapsedHours = elapsedMs / (1000 * 60 * 60);
+        const remainingHours = Math.max(0, deliveryHours - elapsedHours);
+
+        // Add any current pause time to the ETA
+        const currentPauseMs = state.pausedAt ? Date.now() - state.pausedAt : 0;
+        const etaMinutes = (remainingHours * 60) + (currentPauseMs / (1000 * 60));
         const eta = new Date(Date.now() + etaMinutes * 60 * 1000);
 
+        // Calculate progress percentage
+        const progressPercent = Math.round((state.currentIndex * STEPS_PER_SEGMENT + state.subStep) / totalSteps * 100);
+
         // Save to database periodically (every 5 steps)
-        if (subStep % 5 === 0) {
+        if (state.subStep % 5 === 0) {
           await this.prisma.shipmentLocation.create({
             data: {
               shipmentId,
@@ -427,9 +453,7 @@ export class TrackingGateway
           progress: {
             currentIndex: state.currentIndex,
             totalPoints: route.length,
-            percentComplete: Math.round(
-              (state.currentIndex / (route.length - 1)) * 100,
-            ),
+            percentComplete: progressPercent,
           },
           distance: {
             total: state.totalDistance,
@@ -443,9 +467,9 @@ export class TrackingGateway
         });
 
         // Move to next substep
-        subStep++;
-        if (subStep >= STEPS_PER_SEGMENT) {
-          subStep = 0;
+        state.subStep++;
+        if (state.subStep >= STEPS_PER_SEGMENT) {
+          state.subStep = 0;
           state.currentIndex++;
 
           // Check if we've reached the destination
@@ -495,7 +519,7 @@ export class TrackingGateway
 
     state.interval = interval;
     this.activeSimulations.set(shipmentId, state);
-    this.logger.log(`Started route simulation for shipment: ${shipmentId} with ${route.length} points`);
+    this.logger.log(`Started real-time route simulation for shipment: ${shipmentId} with ${route.length} points, completing in ${deliveryDays} days`);
   }
 
   // Legacy simulation method

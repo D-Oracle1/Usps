@@ -128,11 +128,27 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
   const [interceptReason, setInterceptReason] = useState('')
   const [clearReason, setClearReason] = useState('')
 
-  // Smooth position interpolation using requestAnimationFrame
+  // Smooth position interpolation with improved stability
   const animateToPosition = useCallback((targetLat: number, targetLng: number) => {
     targetPositionRef.current = [targetLat, targetLng]
 
-    const animate = () => {
+    // Cancel any existing animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current)
+      animationRef.current = null
+    }
+
+    let lastTime = performance.now()
+
+    const animate = (currentTime: number) => {
+      // Throttle to ~30fps for stability
+      const deltaTime = currentTime - lastTime
+      if (deltaTime < 33) {
+        animationRef.current = requestAnimationFrame(animate)
+        return
+      }
+      lastTime = currentTime
+
       setAnimatedPosition(current => {
         const [currentLat, currentLng] = current
         const [tLat, tLng] = targetPositionRef.current
@@ -140,9 +156,10 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
         const diffLat = tLat - currentLat
         const diffLng = tLng - currentLng
 
-        // Smooth interpolation
-        const factor = 0.12
+        // Use smaller factor for smoother, more stable animation
+        const factor = 0.08
 
+        // Check if we're close enough to snap to target
         if (Math.abs(diffLat) < 0.00001 && Math.abs(diffLng) < 0.00001) {
           return [tLat, tLng]
         }
@@ -156,9 +173,6 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
       animationRef.current = requestAnimationFrame(animate)
     }
 
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current)
-    }
     animationRef.current = requestAnimationFrame(animate)
   }, [])
 

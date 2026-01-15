@@ -54,32 +54,51 @@ export default function PublicTrackingMapPage() {
   const [progress, setProgress] = useState(0)
   const [mapReady, setMapReady] = useState(false)
 
-  // Smooth position interpolation
+  // Smooth position interpolation with improved stability
   const animateToPosition = useCallback((targetLat: number, targetLng: number) => {
     targetPositionRef.current = [targetLat, targetLng]
 
-    const animate = () => {
+    // Cancel any existing animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current)
+      animationRef.current = null
+    }
+
+    let lastTime = performance.now()
+
+    const animate = (currentTime: number) => {
+      // Throttle to ~30fps for stability
+      const deltaTime = currentTime - lastTime
+      if (deltaTime < 33) {
+        animationRef.current = requestAnimationFrame(animate)
+        return
+      }
+      lastTime = currentTime
+
       setAnimatedPosition(current => {
         const [currentLat, currentLng] = current
         const [tLat, tLng] = targetPositionRef.current
 
         const diffLat = tLat - currentLat
         const diffLng = tLng - currentLng
-        const factor = 0.15
 
-        if (Math.abs(diffLat) < 0.0001 && Math.abs(diffLng) < 0.0001) {
+        // Use smaller factor for smoother, more stable animation
+        const factor = 0.08
+
+        // Check if we're close enough to snap to target
+        if (Math.abs(diffLat) < 0.00001 && Math.abs(diffLng) < 0.00001) {
           return [tLat, tLng]
         }
 
-        return [currentLat + diffLat * factor, currentLng + diffLng * factor]
+        return [
+          currentLat + diffLat * factor,
+          currentLng + diffLng * factor
+        ]
       })
 
       animationRef.current = requestAnimationFrame(animate)
     }
 
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current)
-    }
     animationRef.current = requestAnimationFrame(animate)
   }, [])
 
@@ -372,13 +391,17 @@ export default function PublicTrackingMapPage() {
         {/* Status Overlay */}
         <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 z-[1000] min-w-[180px]">
           <div className="flex items-center gap-2 mb-2">
-            <div className={`w-3 h-3 rounded-full ${isMoving ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
+            <div className={`w-3 h-3 rounded-full ${
+              shipment.currentStatus === 'DELIVERED' ? 'bg-green-500' :
+              isMoving ? 'bg-green-500 animate-pulse' : 'bg-blue-500'
+            }`} />
             <span className="font-medium text-gray-900">
               {shipment.currentStatus === 'DELIVERED' ? 'Delivered' :
-               isMoving ? 'In Transit' : 'Paused'}
+               shipment.currentStatus === 'PENDING' ? 'Pending Pickup' :
+               isMoving ? 'In Transit' : 'Processing'}
             </span>
           </div>
-          {speed > 0 && (
+          {isMoving && speed > 0 && (
             <div className="flex items-center text-sm text-gray-600">
               <Navigation className="w-4 h-4 mr-1" />
               {Math.round(speed)} km/h
@@ -388,7 +411,7 @@ export default function PublicTrackingMapPage() {
             <div className="mt-2">
               <div className="text-xs text-gray-500 mb-1">Progress</div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-[#333366] h-2 rounded-full" style={{ width: `${progress}%` }} />
+                <div className="bg-[#333366] h-2 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
               </div>
             </div>
           )}
