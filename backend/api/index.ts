@@ -1,21 +1,14 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, INestApplication } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
-import { ExpressAdapter, NestExpressApplication } from '@nestjs/platform-express';
-import express, { Request, Response, Express } from 'express';
+import { Request, Response } from 'express';
 
-let cachedApp: INestApplication | null = null;
-let cachedServer: Express | null = null;
+let cachedApp: any = null;
 
-async function bootstrap(): Promise<Express> {
-  const server = express();
-  const adapter = new ExpressAdapter(server);
-
-  const app = await NestFactory.create<NestExpressApplication>(
-    AppModule,
-    adapter,
-    { logger: ['error', 'warn', 'log'] },
-  );
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'log'],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -33,9 +26,7 @@ async function bootstrap(): Promise<Express> {
   });
 
   await app.init();
-  cachedApp = app;
-
-  return server;
+  return app;
 }
 
 export default async function handler(req: Request, res: Response) {
@@ -55,12 +46,15 @@ export default async function handler(req: Request, res: Response) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   try {
-    if (!cachedServer) {
+    if (!cachedApp) {
       console.log('Bootstrapping NestJS application...');
-      cachedServer = await bootstrap();
+      cachedApp = await bootstrap();
       console.log('NestJS application ready');
     }
-    cachedServer(req, res);
+
+    const httpAdapter = cachedApp.getHttpAdapter();
+    const instance = httpAdapter.getInstance();
+    instance(req, res);
   } catch (error: any) {
     console.error('Server initialization error:', error);
     res.status(500).json({
