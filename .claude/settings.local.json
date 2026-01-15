@@ -37,7 +37,16 @@
       "Bash(tasklist:*)",
       "Bash(powershell -Command:*)",
       "Bash(npx dotenv:*)",
-      "Bash(npx nest build)"
+      "Bash(npx nest build)",
+      "Bash(git fetch:*)",
+      "Bash(set \"DATABASE_URL=postgresql://postgres.kcnudftcmxtxmwslcbxm:1%%402%%233%%244%%255%%266-@aws-1-eu-west-3.pooler.supabase.com:6543/postgres\")",
+      "Bash(node -e:*)",
+      "Bash(npx kill-port:*)",
+      "WebFetch(domain:usps-production.up.railway.app)",
+      "Bash(DATABASE_URL=\"postgresql://postgres:93rMrdfxgFNbMCW@db.kcnudftcmxtxmwslcbxm.supabase.co:5432/postgres\" npx prisma db push:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres.kcnudftcmxtxmwslcbxm:93rMrdfxgFNbMCW@aws-0-eu-west-3.pooler.supabase.com:6543/postgres\" npx prisma db push:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres:93rMrdfxgFNbMCW@db.kcnudftcmxtxmwslcbxm.supabase.co:5432/postgres?connect_timeout=30\" npx prisma db push:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres:93rMrdfxgFNbMCW@db.kcnudftcmxtxmwslcbxm.supabase.co:5432/postgres?sslmode=require\" npx prisma db push:*)"
     ]
   }
 }

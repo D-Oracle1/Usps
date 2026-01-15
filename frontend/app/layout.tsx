@@ -1,16 +1,8 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import 'leaflet/dist/leaflet.css'
-import { AuthProvider } from '@/lib/auth-context'
-import { SupportAuthProvider } from '@/lib/support-auth-context'
-import ChatWidget from '@/components/support/ChatWidget'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Courier Tracking System - Admin Portal',
-  description: 'Real-time shipment tracking and management system',
+  title: 'USPS - United States Postal Service',
+  description: 'Welcome to USPS.com. Track packages, pay and print postage, schedule free package pickups, and find everything you need for sending mail and shipping packages.',
 }
 
 export default function RootLayout({
@@ -20,14 +12,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <AuthProvider>
-          <SupportAuthProvider>
-            {children}
-            <ChatWidget />
-          </SupportAuthProvider>
-        </AuthProvider>
-      </body>
+      <body>{children}</body>
     </html>
   )
 }
