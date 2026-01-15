@@ -3,17 +3,25 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TrackingGateway } from '../websocket/tracking.gateway';
 import { PricingService, AddressChangeFeeCalculation } from '../pricing/pricing.service';
 
-// City coordinates for routing simulation
+// City and state coordinates for routing simulation
 const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  // Major cities
   'new york': { lat: 40.7128, lng: -74.0060 },
   'ny': { lat: 40.7128, lng: -74.0060 },
   'nyc': { lat: 40.7128, lng: -74.0060 },
+  'new york city': { lat: 40.7128, lng: -74.0060 },
+  'manhattan': { lat: 40.7831, lng: -73.9712 },
+  'brooklyn': { lat: 40.6782, lng: -73.9442 },
+  'queens': { lat: 40.7282, lng: -73.7949 },
+  'bronx': { lat: 40.8448, lng: -73.8648 },
+  'staten island': { lat: 40.5795, lng: -74.1502 },
   'los angeles': { lat: 34.0522, lng: -118.2437 },
   'la': { lat: 34.0522, lng: -118.2437 },
   'chicago': { lat: 41.8781, lng: -87.6298 },
   'houston': { lat: 29.7604, lng: -95.3698 },
   'phoenix': { lat: 33.4484, lng: -112.0740 },
   'philadelphia': { lat: 39.9526, lng: -75.1652 },
+  'philly': { lat: 39.9526, lng: -75.1652 },
   'san antonio': { lat: 29.4241, lng: -98.4936 },
   'san diego': { lat: 32.7157, lng: -117.1611 },
   'dallas': { lat: 32.7767, lng: -96.7970 },
@@ -24,15 +32,18 @@ const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   'columbus': { lat: 39.9612, lng: -82.9988 },
   'charlotte': { lat: 35.2271, lng: -80.8431 },
   'san francisco': { lat: 37.7749, lng: -122.4194 },
+  'sf': { lat: 37.7749, lng: -122.4194 },
   'indianapolis': { lat: 39.7684, lng: -86.1581 },
   'seattle': { lat: 47.6062, lng: -122.3321 },
   'denver': { lat: 39.7392, lng: -104.9903 },
   'washington': { lat: 38.9072, lng: -77.0369 },
   'dc': { lat: 38.9072, lng: -77.0369 },
+  'washington dc': { lat: 38.9072, lng: -77.0369 },
   'boston': { lat: 42.3601, lng: -71.0589 },
   'miami': { lat: 25.7617, lng: -80.1918 },
   'atlanta': { lat: 33.7490, lng: -84.3880 },
   'las vegas': { lat: 36.1699, lng: -115.1398 },
+  'vegas': { lat: 36.1699, lng: -115.1398 },
   'portland': { lat: 45.5152, lng: -122.6784 },
   'detroit': { lat: 42.3314, lng: -83.0458 },
   'memphis': { lat: 35.1495, lng: -90.0490 },
@@ -56,6 +67,77 @@ const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   'cincinnati': { lat: 39.1031, lng: -84.5120 },
   'st louis': { lat: 38.6270, lng: -90.1994 },
   'orlando': { lat: 28.5383, lng: -81.3792 },
+
+  // States (using major city or geographic center)
+  'new jersey': { lat: 40.0583, lng: -74.4057 },
+  'nj': { lat: 40.0583, lng: -74.4057 },
+  'jersey city': { lat: 40.7178, lng: -74.0431 },
+  'newark': { lat: 40.7357, lng: -74.1724 },
+  'trenton': { lat: 40.2206, lng: -74.7597 },
+  'california': { lat: 36.7783, lng: -119.4179 },
+  'ca': { lat: 36.7783, lng: -119.4179 },
+  'texas': { lat: 31.9686, lng: -99.9018 },
+  'tx': { lat: 31.9686, lng: -99.9018 },
+  'florida': { lat: 27.6648, lng: -81.5158 },
+  'fl': { lat: 27.6648, lng: -81.5158 },
+  'illinois': { lat: 40.6331, lng: -89.3985 },
+  'il': { lat: 40.6331, lng: -89.3985 },
+  'pennsylvania': { lat: 41.2033, lng: -77.1945 },
+  'pa': { lat: 41.2033, lng: -77.1945 },
+  'ohio': { lat: 40.4173, lng: -82.9071 },
+  'georgia': { lat: 32.1656, lng: -82.9001 },
+  'ga': { lat: 32.1656, lng: -82.9001 },
+  'north carolina': { lat: 35.7596, lng: -79.0193 },
+  'nc': { lat: 35.7596, lng: -79.0193 },
+  'michigan': { lat: 44.3148, lng: -85.6024 },
+  'arizona': { lat: 34.0489, lng: -111.0937 },
+  'az': { lat: 34.0489, lng: -111.0937 },
+  'massachusetts': { lat: 42.4072, lng: -71.3824 },
+  'ma': { lat: 42.4072, lng: -71.3824 },
+  'virginia': { lat: 37.4316, lng: -78.6569 },
+  'va': { lat: 37.4316, lng: -78.6569 },
+  'tennessee': { lat: 35.5175, lng: -86.5804 },
+  'tn': { lat: 35.5175, lng: -86.5804 },
+  'washington state': { lat: 47.7511, lng: -120.7401 },
+  'wa': { lat: 47.7511, lng: -120.7401 },
+  'colorado': { lat: 39.5501, lng: -105.7821 },
+  'co': { lat: 39.5501, lng: -105.7821 },
+  'maryland': { lat: 39.0458, lng: -76.6413 },
+  'md': { lat: 39.0458, lng: -76.6413 },
+  'connecticut': { lat: 41.6032, lng: -73.0877 },
+  'ct': { lat: 41.6032, lng: -73.0877 },
+  'oregon': { lat: 43.8041, lng: -120.5542 },
+  'nevada': { lat: 38.8026, lng: -116.4194 },
+  'nv': { lat: 38.8026, lng: -116.4194 },
+  'utah': { lat: 39.3210, lng: -111.0937 },
+  'indiana': { lat: 40.2672, lng: -86.1349 },
+  'missouri': { lat: 37.9643, lng: -91.8318 },
+  'wisconsin': { lat: 43.7844, lng: -88.7879 },
+  'minnesota': { lat: 46.7296, lng: -94.6859 },
+  'alabama': { lat: 32.3182, lng: -86.9023 },
+  'louisiana': { lat: 30.9843, lng: -91.9623 },
+  'kentucky': { lat: 37.8393, lng: -84.2700 },
+  'oklahoma': { lat: 35.0078, lng: -97.0929 },
+  'south carolina': { lat: 33.8361, lng: -81.1637 },
+  'iowa': { lat: 41.8780, lng: -93.0977 },
+  'arkansas': { lat: 35.2010, lng: -91.8318 },
+  'kansas': { lat: 39.0119, lng: -98.4842 },
+  'mississippi': { lat: 32.3547, lng: -89.3985 },
+  'nebraska': { lat: 41.4925, lng: -99.9018 },
+  'new mexico': { lat: 34.5199, lng: -105.8701 },
+  'idaho': { lat: 44.0682, lng: -114.7420 },
+  'hawaii': { lat: 19.8968, lng: -155.5828 },
+  'west virginia': { lat: 38.5976, lng: -80.4549 },
+  'maine': { lat: 45.2538, lng: -69.4455 },
+  'new hampshire': { lat: 43.1939, lng: -71.5724 },
+  'rhode island': { lat: 41.5801, lng: -71.4774 },
+  'montana': { lat: 46.8797, lng: -110.3626 },
+  'delaware': { lat: 38.9108, lng: -75.5277 },
+  'south dakota': { lat: 43.9695, lng: -99.9018 },
+  'north dakota': { lat: 47.5515, lng: -101.0020 },
+  'alaska': { lat: 64.2008, lng: -152.4937 },
+  'vermont': { lat: 44.5588, lng: -72.5778 },
+  'wyoming': { lat: 43.0760, lng: -107.2903 },
 };
 
 @Injectable()
@@ -126,24 +208,30 @@ export class MovementService {
   private generateRoute(origin: { lat: number; lng: number }, destination: { lat: number; lng: number }, points: number = 20): Array<{ lat: number; lng: number }> {
     const route: Array<{ lat: number; lng: number }> = [];
 
+    // Calculate direct distance to determine curve amount
+    const directDistance = this.calculateHaversineDistance(
+      origin.lat, origin.lng, destination.lat, destination.lng
+    );
+
+    // For short distances (<100km), use straight line with minimal curve
+    // For longer distances, add slight curve to simulate road routing
+    const curveAmount = directDistance < 100 ? 0.01 : Math.min(0.1, directDistance / 5000);
+
     for (let i = 0; i <= points; i++) {
       const t = i / points;
-      // Add some curve to make it more realistic (Bezier-like)
-      const midLat = (origin.lat + destination.lat) / 2 + (Math.random() - 0.5) * 2;
-      const midLng = (origin.lng + destination.lng) / 2 + (Math.random() - 0.5) * 2;
 
-      let lat: number, lng: number;
-      if (t <= 0.5) {
-        const t2 = t * 2;
-        lat = origin.lat + (midLat - origin.lat) * t2;
-        lng = origin.lng + (midLng - origin.lng) * t2;
-      } else {
-        const t2 = (t - 0.5) * 2;
-        lat = midLat + (destination.lat - midLat) * t2;
-        lng = midLng + (destination.lng - midLng) * t2;
-      }
+      // Simple linear interpolation with slight curve for realism
+      const lat = origin.lat + (destination.lat - origin.lat) * t;
+      const lng = origin.lng + (destination.lng - origin.lng) * t;
 
-      route.push({ lat, lng });
+      // Add slight perpendicular offset for curve (parabolic)
+      const curveOffset = curveAmount * Math.sin(t * Math.PI);
+      const angle = Math.atan2(destination.lng - origin.lng, destination.lat - origin.lat);
+
+      route.push({
+        lat: lat + curveOffset * Math.cos(angle + Math.PI / 2),
+        lng: lng + curveOffset * Math.sin(angle + Math.PI / 2)
+      });
     }
 
     return route;
