@@ -49,8 +49,19 @@ export default async function handler(req: Request, res: Response) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-  if (!cachedApp) {
-    cachedApp = await createNestServer();
+  try {
+    if (!cachedApp) {
+      console.log('Creating NestJS server...');
+      cachedApp = await createNestServer();
+      console.log('NestJS server created successfully');
+    }
+    expressApp(req, res);
+  } catch (error: any) {
+    console.error('Server initialization error:', error);
+    res.status(500).json({
+      error: 'Server initialization failed',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
   }
-  expressApp(req, res);
 }
