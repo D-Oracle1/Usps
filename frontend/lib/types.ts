@@ -36,10 +36,18 @@ export interface Shipment {
   // Special instructions
   specialInstructions?: string | null
 
+  // Distance and ETA tracking
+  totalDistance?: number | null
+  remainingDistance?: number | null
+  estimatedArrival?: string | null
+  tripStartedAt?: string | null
+  averageSpeed?: number | null
+
   // Relations
   movementState?: MovementState
   trackingEvents?: TrackingEvent[]
   locations?: Location[]
+  addressChangeFees?: AddressChangeFee[]
   _count?: {
     trackingEvents: number
     locations: number
@@ -141,3 +149,74 @@ export const SERVICE_TYPES = [
   { value: 'RETAIL_GROUND', label: 'Retail Ground' },
   { value: 'PARCEL_SELECT', label: 'Parcel Select' },
 ] as const
+
+// Address Change Fee types
+export interface AddressChangeFee {
+  id: string
+  shipmentId: string
+  previousDestination: string
+  newDestination: string
+  distanceDifference: number
+  timeDifference: number
+  baseFee: number
+  perMileFee: number
+  totalFee: number
+  appliedAt: string
+  admin?: {
+    id: string
+    name: string
+    email: string
+  }
+}
+
+export interface AddressChangeFeeCalculation {
+  previousDestination: string
+  newDestination: string
+  previousDistance: number
+  newDistance: number
+  distanceDifference: number
+  timeDifference: number
+  baseFee: number
+  perMileFee: number
+  extraMilesFee: number
+  totalFee: number
+  newEta: string
+}
+
+export interface TripInfo {
+  totalDistance: number | null
+  remainingDistance: number | null
+  estimatedArrival: string | null
+  tripStartedAt: string | null
+  averageSpeed: number | null
+  simulationProgress: {
+    currentIndex: number
+    totalPoints: number
+    isPaused: boolean
+    percentComplete: number
+  } | null
+  addressChangeFees: AddressChangeFee[]
+}
+
+export interface LocationUpdateWithEta {
+  shipmentId: string
+  latitude: number
+  longitude: number
+  speed: number
+  heading: number
+  timestamp: string
+  progress: {
+    currentIndex: number
+    totalPoints: number
+    percentComplete: number
+  }
+  distance: {
+    total: number
+    remaining: number
+    covered: number
+  }
+  eta: {
+    arrival: string
+    minutesRemaining: number
+  }
+}

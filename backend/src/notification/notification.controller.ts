@@ -30,6 +30,11 @@ export class NotificationController {
       recipientPhone: null,
       recipientEmail: null,
       specialInstructions: null,
+      totalDistance: null,
+      remainingDistance: null,
+      estimatedArrival: null,
+      tripStartedAt: null,
+      averageSpeed: null,
     };
 
     const success = await this.notificationService.sendShipmentCreatedEmail(

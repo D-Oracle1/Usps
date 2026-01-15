@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
-import type { Shipment, Location as LocationType } from '@/lib/types'
-import { Play, Pause, Square, MapPin, Navigation, Truck, AlertCircle, CheckCircle, Search, X } from 'lucide-react'
+import type { Shipment, Location as LocationType, AddressChangeFeeCalculation } from '@/lib/types'
+import { Play, Pause, Square, MapPin, Navigation, Truck, AlertCircle, CheckCircle, Search, X, Clock, Route, DollarSign } from 'lucide-react'
 import api from '@/lib/api'
 import dynamic from 'next/dynamic'
 
@@ -99,6 +99,24 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
   const [showAddressInput, setShowAddressInput] = useState(false)
   const [addressInput, setAddressInput] = useState('')
   const [isGeocodingAddress, setIsGeocodingAddress] = useState(false)
+
+  // ETA and Distance tracking state
+  const [eta, setEta] = useState<{ arrival: Date | null; minutesRemaining: number }>({
+    arrival: null,
+    minutesRemaining: 0,
+  })
+  const [distance, setDistance] = useState<{
+    total: number
+    remaining: number
+    covered: number
+  }>({ total: 0, remaining: 0, covered: 0 })
+
+  // Address change modal state
+  const [showAddressChangeModal, setShowAddressChangeModal] = useState(false)
+  const [newDestination, setNewDestination] = useState('')
+  const [feeCalculation, setFeeCalculation] = useState<AddressChangeFeeCalculation | null>(null)
+  const [isCalculatingFee, setIsCalculatingFee] = useState(false)
+  const [isApplyingChange, setIsApplyingChange] = useState(false)
 
   // Smooth position interpolation using requestAnimationFrame
   const animateToPosition = useCallback((targetLat: number, targetLng: number) => {
@@ -241,6 +259,29 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
       if (data.progress) {
         setProgress(data.progress.percentComplete)
       }
+
+      // Update distance and ETA from WebSocket data
+      if (data.distance) {
+        setDistance(data.distance)
+      }
+      if (data.eta) {
+        setEta({
+          arrival: new Date(data.eta.arrival),
+          minutesRemaining: data.eta.minutesRemaining,
+        })
+      }
+    })
+
+    // Listen for address change events
+    socket.current.on('addressChanged', (data) => {
+      setEta({
+        arrival: new Date(data.newEta),
+        minutesRemaining: Math.round((data.newRemainingDistance / 45) * 60),
+      })
+      setDistance((prev) => ({
+        ...prev,
+        remaining: data.newRemainingDistance,
+      }))
     })
 
     socket.current.on('shipmentPaused', () => {
@@ -275,7 +316,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     }
   }, [shipment.id, onMovementStateChange, animateToPosition])
 
-  // Handle Start Movement
+  // Handle Start Trip
   const handleStart = async () => {
     setIsLoading(true)
     setError('')
@@ -302,9 +343,25 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
         }
       }
 
+      // Set initial distance and ETA from response
+      if (response.data.totalDistance) {
+        setDistance({
+          total: response.data.totalDistance,
+          remaining: response.data.remainingDistance || response.data.totalDistance,
+          covered: 0,
+        })
+      }
+      if (response.data.estimatedArrival) {
+        const arrivalDate = new Date(response.data.estimatedArrival)
+        setEta({
+          arrival: arrivalDate,
+          minutesRemaining: response.data.estimatedTravelTime || Math.round((response.data.totalDistance / 45) * 60),
+        })
+      }
+
       if (onMovementStateChange) onMovementStateChange()
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to start movement')
+      setError(err.response?.data?.message || 'Failed to start trip')
     } finally {
       setIsLoading(false)
     }
@@ -408,6 +465,62 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
       setError('Failed to geocode address')
     } finally {
       setIsGeocodingAddress(false)
+    }
+  }
+
+  // Format ETA time
+  const formatEta = (date: Date | null): string => {
+    if (!date) return '--:--'
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
+  // Format minutes to hours and minutes
+  const formatMinutes = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60)
+    const mins = Math.round(minutes % 60)
+    if (hours > 0) {
+      return `${hours}h ${mins}m`
+    }
+    return `${mins}m`
+  }
+
+  // Calculate address change fee
+  const handleCalculateFee = async () => {
+    if (!newDestination.trim()) return
+
+    setIsCalculatingFee(true)
+    setError('')
+    try {
+      const response = await api.post(
+        `/movement/${shipment.id}/calculate-address-change-fee`,
+        { newDestination: newDestination.trim() }
+      )
+      setFeeCalculation(response.data)
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to calculate fee')
+    } finally {
+      setIsCalculatingFee(false)
+    }
+  }
+
+  // Apply address change
+  const handleApplyAddressChange = async () => {
+    if (!feeCalculation) return
+
+    setIsApplyingChange(true)
+    setError('')
+    try {
+      await api.post(`/movement/${shipment.id}/change-address`, {
+        newDestination: feeCalculation.newDestination,
+      })
+      setShowAddressChangeModal(false)
+      setFeeCalculation(null)
+      setNewDestination('')
+      if (onMovementStateChange) onMovementStateChange()
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to apply address change')
+    } finally {
+      setIsApplyingChange(false)
     }
   }
 
@@ -644,7 +757,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
                 className="flex items-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 w-full justify-center font-semibold transition-all shadow-md"
               >
                 <Play className="w-5 h-5 mr-2" fill="white" />
-                Start Movement
+                Start Trip
               </button>
             )}
 
@@ -725,6 +838,54 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
           </div>
         )}
 
+        {/* Trip Information - ETA and Distance */}
+        {hasStarted && !isDelivered && !isCancelled && (
+          <div className="pt-3 border-t space-y-2">
+            <div className="text-xs text-gray-500 mb-2">Trip Information</div>
+
+            {/* ETA */}
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 flex items-center">
+                <Clock className="w-4 h-4 mr-1 text-[#333366]" />
+                ETA:
+              </span>
+              <span className="text-sm font-semibold text-[#333366]">
+                {formatEta(eta.arrival)}
+              </span>
+            </div>
+
+            {/* Time Remaining */}
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Time Left:</span>
+              <span className="text-sm font-medium text-gray-700">
+                {formatMinutes(eta.minutesRemaining)}
+              </span>
+            </div>
+
+            {/* Distance */}
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 flex items-center">
+                <Route className="w-4 h-4 mr-1 text-[#333366]" />
+                Distance:
+              </span>
+              <span className="text-sm font-medium text-gray-700">
+                {distance.remaining.toFixed(1)} / {distance.total.toFixed(1)} km
+              </span>
+            </div>
+
+            {/* Change Address Button (only during transit, not paused) */}
+            {isMoving && (
+              <button
+                onClick={() => setShowAddressChangeModal(true)}
+                className="w-full mt-2 px-3 py-2 text-sm bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors flex items-center justify-center"
+              >
+                <MapPin className="w-4 h-4 mr-1" />
+                Change Destination Address
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Status */}
         <div className="pt-3 border-t">
           <div className="text-xs text-gray-500 mb-2">Status</div>
@@ -795,6 +956,139 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
           </div>
         </div>
       </div>
+
+      {/* Address Change Modal */}
+      {showAddressChangeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[2000]">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <MapPin className="w-5 h-5 mr-2 text-[#333366]" />
+              Change Destination Address
+            </h3>
+
+            {!feeCalculation ? (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Current Destination
+                  </label>
+                  <p className="text-gray-600 bg-gray-50 p-2 rounded">
+                    {shipment.destinationLocation}
+                  </p>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Destination
+                  </label>
+                  <input
+                    type="text"
+                    value={newDestination}
+                    onChange={(e) => setNewDestination(e.target.value)}
+                    placeholder="Enter new destination address..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#333366]"
+                  />
+                </div>
+
+                {error && (
+                  <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowAddressChangeModal(false)
+                      setNewDestination('')
+                      setError('')
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCalculateFee}
+                    disabled={isCalculatingFee || !newDestination.trim()}
+                    className="flex-1 px-4 py-2 bg-[#333366] text-white rounded-lg hover:bg-[#1a1a4e] disabled:opacity-50"
+                  >
+                    {isCalculatingFee ? 'Calculating...' : 'Calculate Fee'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <h4 className="font-medium text-blue-800 mb-2 flex items-center">
+                    <DollarSign className="w-4 h-4 mr-1" />
+                    Fee Calculation
+                  </h4>
+                  <div className="space-y-1 text-sm text-blue-700">
+                    <div className="flex justify-between">
+                      <span>Base Fee:</span>
+                      <span>${feeCalculation.baseFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>
+                        Extra Miles ({(feeCalculation.distanceDifference * 0.621).toFixed(1)} mi @ $0.50):
+                      </span>
+                      <span>${feeCalculation.extraMilesFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold border-t border-blue-200 pt-1 mt-1">
+                      <span>Total Fee:</span>
+                      <span>${feeCalculation.totalFee.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-4 text-sm text-gray-600 space-y-1">
+                  <p>
+                    <strong>From:</strong> {feeCalculation.previousDestination}
+                  </p>
+                  <p>
+                    <strong>To:</strong> {feeCalculation.newDestination}
+                  </p>
+                  <p>
+                    <strong>New ETA:</strong>{' '}
+                    {new Date(feeCalculation.newEta).toLocaleString()}
+                  </p>
+                  <p>
+                    <strong>Time Difference:</strong>{' '}
+                    {feeCalculation.timeDifference > 0 ? '+' : ''}
+                    {Math.round(feeCalculation.timeDifference)} minutes
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setFeeCalculation(null)
+                      setNewDestination('')
+                      setError('')
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleApplyAddressChange}
+                    disabled={isApplyingChange}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {isApplyingChange ? 'Applying...' : 'Confirm & Apply'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

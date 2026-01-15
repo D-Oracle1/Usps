@@ -22,6 +22,7 @@ model AdminUser {
   // Relations
   trackingEvents       TrackingEvent[]
   pausedShipments      ShipmentMovementState[] @relation("PausedBy")
+  addressChangeFees    AddressChangeFee[]
 
   @@map("admin_users")
 }
@@ -57,10 +58,18 @@ model Shipment {
   // Special instructions
   specialInstructions String?  @map("special_instructions")
 
+  // Distance and ETA tracking
+  totalDistance       Float?   @map("total_distance")
+  remainingDistance   Float?   @map("remaining_distance")
+  estimatedArrival    DateTime? @map("estimated_arrival")
+  tripStartedAt       DateTime? @map("trip_started_at")
+  averageSpeed        Float?   @default(45) @map("average_speed")
+
   // Relations
   trackingEvents      TrackingEvent[]
   locations           ShipmentLocation[]
   movementState       ShipmentMovementState?
+  addressChangeFees   AddressChangeFee[]
 
   @@index([trackingNumber])
   @@map("shipments")
@@ -118,6 +127,28 @@ model ShipmentMovementState {
   pausedByAdmin AdminUser? @relation("PausedBy", fields: [pausedBy], references: [id], onDelete: SetNull)
 
   @@map("shipment_movement_states")
+}
+
+// Address Change Fee Model - Records fees for destination changes
+model AddressChangeFee {
+  id                  String   @id @default(uuid())
+  shipmentId          String   @map("shipment_id")
+  previousDestination String   @map("previous_destination")
+  newDestination      String   @map("new_destination")
+  distanceDifference  Float    @map("distance_difference")
+  timeDifference      Float    @map("time_difference")
+  baseFee             Float    @default(5.00) @map("base_fee")
+  perMileFee          Float    @default(0.50) @map("per_mile_fee")
+  totalFee            Float    @map("total_fee")
+  appliedAt           DateTime @default(now()) @map("applied_at")
+  appliedBy           String?  @map("applied_by")
+
+  // Relations
+  shipment            Shipment   @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  admin               AdminUser? @relation(fields: [appliedBy], references: [id], onDelete: SetNull)
+
+  @@index([shipmentId])
+  @@map("address_change_fees")
 }
 
 // Enums

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrackingGateway } from '../websocket/tracking.gateway';
+import { PricingService, AddressChangeFeeCalculation } from '../pricing/pricing.service';
 
 // City coordinates for routing simulation
 const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
@@ -59,10 +60,49 @@ const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
 
 @Injectable()
 export class MovementService {
+  private readonly AVERAGE_SPEED = 45; // km/h
+
   constructor(
     private prisma: PrismaService,
     private trackingGateway: TrackingGateway,
+    private pricingService: PricingService,
   ) {}
+
+  // Calculate distance between two points using Haversine formula
+  private calculateHaversineDistance(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const R = 6371; // Earth's radius in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  // Calculate total route distance
+  private calculateTotalRouteDistance(
+    route: Array<{ lat: number; lng: number }>,
+  ): number {
+    let total = 0;
+    for (let i = 0; i < route.length - 1; i++) {
+      total += this.calculateHaversineDistance(
+        route[i].lat,
+        route[i].lng,
+        route[i + 1].lat,
+        route[i + 1].lng,
+      );
+    }
+    return total;
+  }
 
   private getCoordinatesFromLocation(location: string): { lat: number; lng: number } {
     const normalized = location.toLowerCase().trim();
@@ -130,10 +170,25 @@ export class MovementService {
     // Generate route
     const route = this.generateRoute(originCoords, destCoords, 25);
 
-    // Update shipment status
+    // Calculate total distance and ETA
+    const totalDistance = this.calculateTotalRouteDistance(route);
+    const eta = this.pricingService.calculateEta(totalDistance, this.AVERAGE_SPEED);
+    const travelTimeMinutes = this.pricingService.calculateTravelTime(
+      totalDistance,
+      this.AVERAGE_SPEED,
+    );
+
+    // Update shipment status with distance and ETA
     await this.prisma.shipment.update({
       where: { id: shipmentId },
-      data: { currentStatus: 'IN_TRANSIT' },
+      data: {
+        currentStatus: 'IN_TRANSIT',
+        totalDistance,
+        remainingDistance: totalDistance,
+        estimatedArrival: eta,
+        tripStartedAt: new Date(),
+        averageSpeed: this.AVERAGE_SPEED,
+      },
     });
 
     // Update movement state
@@ -166,14 +221,18 @@ export class MovementService {
       },
     });
 
-    // Start the simulation
-    this.trackingGateway.startRouteSimulation(shipmentId, route);
+    // Start the simulation with distance tracking
+    this.trackingGateway.startRouteSimulation(shipmentId, route, totalDistance);
 
     return {
-      message: 'Movement started successfully',
+      message: 'Trip started successfully',
       route,
       origin: originCoords,
       destination: destCoords,
+      totalDistance,
+      remainingDistance: totalDistance,
+      estimatedArrival: eta,
+      estimatedTravelTime: travelTimeMinutes,
     };
   }
 
@@ -409,6 +468,183 @@ export class MovementService {
         lat: currentLocation.latitude,
         lng: currentLocation.longitude,
       } : originCoords,
+    };
+  }
+
+  // Calculate address change fee preview
+  async calculateAddressChangeFee(
+    shipmentId: string,
+    newDestination: string,
+  ): Promise<AddressChangeFeeCalculation> {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Shipment not found');
+    }
+
+    if (shipment.currentStatus !== 'IN_TRANSIT') {
+      throw new BadRequestException(
+        'Can only change address for in-transit shipments',
+      );
+    }
+
+    // Get current position
+    const currentLocation = await this.prisma.shipmentLocation.findFirst({
+      where: { shipmentId },
+      orderBy: { recordedAt: 'desc' },
+    });
+
+    const currentPos = currentLocation
+      ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
+      : this.getCoordinatesFromLocation(shipment.originLocation);
+
+    // Calculate distances
+    const oldDestCoords = this.getCoordinatesFromLocation(
+      shipment.destinationLocation,
+    );
+    const newDestCoords = this.getCoordinatesFromLocation(newDestination);
+
+    const previousDistance = this.calculateHaversineDistance(
+      currentPos.lat,
+      currentPos.lng,
+      oldDestCoords.lat,
+      oldDestCoords.lng,
+    );
+
+    const newDistance = this.calculateHaversineDistance(
+      currentPos.lat,
+      currentPos.lng,
+      newDestCoords.lat,
+      newDestCoords.lng,
+    );
+
+    const feeCalc = this.pricingService.calculateAddressChangeFee(
+      previousDistance,
+      newDistance,
+      shipment.remainingDistance || previousDistance,
+    );
+
+    return {
+      ...feeCalc,
+      previousDestination: shipment.destinationLocation,
+      newDestination,
+    };
+  }
+
+  // Apply address change with fee
+  async applyAddressChange(
+    shipmentId: string,
+    newDestination: string,
+    adminId: string,
+  ) {
+    const feeCalc = await this.calculateAddressChangeFee(
+      shipmentId,
+      newDestination,
+    );
+
+    // Record the fee
+    await this.pricingService.recordAddressChangeFee(
+      shipmentId,
+      feeCalc,
+      adminId,
+    );
+
+    // Get current position for route recalculation
+    const currentLocation = await this.prisma.shipmentLocation.findFirst({
+      where: { shipmentId },
+      orderBy: { recordedAt: 'desc' },
+    });
+
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+    });
+
+    const currentPos = currentLocation
+      ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
+      : this.getCoordinatesFromLocation(shipment!.originLocation);
+
+    const newDestCoords = this.getCoordinatesFromLocation(newDestination);
+
+    // Generate new route from current position
+    const newRoute = this.generateRoute(currentPos, newDestCoords, 15);
+    const newTotalDistance = this.calculateTotalRouteDistance(newRoute);
+
+    // Update shipment
+    await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: {
+        destinationLocation: newDestination,
+        remainingDistance: newTotalDistance,
+        estimatedArrival: feeCalc.newEta,
+      },
+    });
+
+    // Create tracking event
+    await this.prisma.trackingEvent.create({
+      data: {
+        shipmentId,
+        status: 'ADDRESS_CHANGED',
+        description: `Destination changed from ${feeCalc.previousDestination} to ${newDestination}. Fee: $${feeCalc.totalFee}`,
+        location: `${currentPos.lat.toFixed(5)},${currentPos.lng.toFixed(5)}`,
+        eventTime: new Date(),
+        createdBy: adminId,
+      },
+    });
+
+    // Stop current simulation and restart with new route
+    this.trackingGateway.stopSimulation(shipmentId);
+    this.trackingGateway.startRouteSimulation(
+      shipmentId,
+      newRoute,
+      newTotalDistance,
+    );
+
+    // Emit address change event
+    this.trackingGateway.emitAddressChangeEvent(shipmentId, {
+      newDestination,
+      fee: feeCalc.totalFee,
+      newEta: feeCalc.newEta,
+      newRemainingDistance: newTotalDistance,
+    });
+
+    return {
+      message: 'Address changed successfully',
+      fee: feeCalc,
+      newRoute,
+      newEta: feeCalc.newEta,
+      newRemainingDistance: newTotalDistance,
+    };
+  }
+
+  // Get current trip info with distance and ETA
+  async getTripInfo(shipmentId: string) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: {
+        addressChangeFees: {
+          orderBy: { appliedAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Shipment not found');
+    }
+
+    const simulationStatus =
+      this.trackingGateway.getSimulationStatus(shipmentId);
+
+    return {
+      totalDistance: shipment.totalDistance,
+      remainingDistance: shipment.remainingDistance,
+      estimatedArrival: shipment.estimatedArrival,
+      tripStartedAt: shipment.tripStartedAt,
+      averageSpeed: shipment.averageSpeed,
+      simulationProgress: simulationStatus,
+      addressChangeFees: shipment.addressChangeFees,
     };
   }
 }

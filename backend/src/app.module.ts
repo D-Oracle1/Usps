@@ -11,6 +11,7 @@ import { MovementModule } from './movement/movement.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { NotificationModule } from './notification/notification.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { PricingModule } from './pricing/pricing.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -32,6 +33,7 @@ import { AppController } from './app.controller';
     WebsocketModule,
     NotificationModule,
     AnalyticsModule,
+    PricingModule,
   ],
   providers: [
     {

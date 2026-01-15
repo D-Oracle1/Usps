@@ -31,6 +31,8 @@ interface SimulationState {
   route: RoutePoint[];
   currentIndex: number;
   isPaused: boolean;
+  totalDistance: number;
+  remainingDistance: number;
 }
 
 @WebSocketGateway({
@@ -266,8 +268,41 @@ export class TrackingGateway
     return R * c;
   }
 
+  // Calculate total route distance
+  private calculateRouteDistance(route: RoutePoint[]): number {
+    let total = 0;
+    for (let i = 0; i < route.length - 1; i++) {
+      total += this.calculateDistance(route[i], route[i + 1]);
+    }
+    return total;
+  }
+
+  // Calculate remaining distance from current position
+  private calculateRemainingDistance(
+    route: RoutePoint[],
+    currentIndex: number,
+    currentLat: number,
+    currentLng: number,
+  ): number {
+    let remaining = 0;
+    if (currentIndex < route.length - 1) {
+      remaining += this.calculateDistance(
+        { lat: currentLat, lng: currentLng },
+        route[currentIndex + 1],
+      );
+      for (let i = currentIndex + 1; i < route.length - 1; i++) {
+        remaining += this.calculateDistance(route[i], route[i + 1]);
+      }
+    }
+    return remaining;
+  }
+
   // Start route-based simulation (Bolt-like movement)
-  startRouteSimulation(shipmentId: string, route: RoutePoint[]) {
+  startRouteSimulation(
+    shipmentId: string,
+    route: RoutePoint[],
+    totalDistance?: number,
+  ) {
     // Stop any existing simulation
     this.stopSimulation(shipmentId);
 
@@ -276,11 +311,16 @@ export class TrackingGateway
       return;
     }
 
+    const calculatedDistance =
+      totalDistance || this.calculateRouteDistance(route);
+
     const state: SimulationState = {
       interval: null as any,
       route,
       currentIndex: 0,
       isPaused: false,
+      totalDistance: calculatedDistance,
+      remainingDistance: calculatedDistance,
     };
 
     // Interpolation settings
@@ -319,6 +359,19 @@ export class TrackingGateway
         const segmentDistance = this.calculateDistance(currentPoint, nextPoint);
         const speed = (segmentDistance / (STEPS_PER_SEGMENT * UPDATE_INTERVAL_MS / 1000 / 3600)) * 1000; // Convert to m/s
 
+        // Calculate remaining distance and ETA
+        const remainingDistance = this.calculateRemainingDistance(
+          route,
+          state.currentIndex,
+          interpolatedLat,
+          interpolatedLng,
+        );
+        state.remainingDistance = remainingDistance;
+
+        const AVERAGE_SPEED = 45; // km/h
+        const etaMinutes = (remainingDistance / AVERAGE_SPEED) * 60;
+        const eta = new Date(Date.now() + etaMinutes * 60 * 1000);
+
         // Save to database periodically (every 5 steps)
         if (subStep % 5 === 0) {
           await this.prisma.shipmentLocation.create({
@@ -335,11 +388,13 @@ export class TrackingGateway
             where: { id: shipmentId },
             data: {
               currentLocation: `${interpolatedLat.toFixed(6)},${interpolatedLng.toFixed(6)}`,
+              remainingDistance,
+              estimatedArrival: eta,
             },
           });
         }
 
-        // Emit location update
+        // Emit location update with distance and ETA
         this.emitLocationUpdate(shipmentId, {
           latitude: interpolatedLat,
           longitude: interpolatedLng,
@@ -349,7 +404,18 @@ export class TrackingGateway
           progress: {
             currentIndex: state.currentIndex,
             totalPoints: route.length,
-            percentComplete: Math.round((state.currentIndex / (route.length - 1)) * 100),
+            percentComplete: Math.round(
+              (state.currentIndex / (route.length - 1)) * 100,
+            ),
+          },
+          distance: {
+            total: state.totalDistance,
+            remaining: remainingDistance,
+            covered: state.totalDistance - remainingDistance,
+          },
+          eta: {
+            arrival: eta,
+            minutesRemaining: Math.round(etaMinutes),
           },
         });
 
@@ -453,7 +519,28 @@ export class TrackingGateway
       currentIndex: simulation.currentIndex,
       totalPoints: simulation.route.length,
       isPaused: simulation.isPaused,
-      percentComplete: Math.round((simulation.currentIndex / (simulation.route.length - 1)) * 100),
+      percentComplete: Math.round(
+        (simulation.currentIndex / (simulation.route.length - 1)) * 100,
+      ),
     };
+  }
+
+  // Emit address change event
+  emitAddressChangeEvent(
+    shipmentId: string,
+    data: {
+      newDestination: string;
+      fee: number;
+      newEta: Date;
+      newRemainingDistance: number;
+    },
+  ) {
+    const room = `shipment:${shipmentId}`;
+    this.server.to(room).emit('addressChanged', {
+      shipmentId,
+      ...data,
+      timestamp: new Date(),
+    });
+    this.logger.log(`Emitted address change event for shipment: ${shipmentId}`);
   }
 }
