@@ -1,3 +1,5 @@
+'use client'
+
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/lib/auth-context'
 import { SupportAuthProvider } from '@/lib/support-auth-context'
