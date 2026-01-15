@@ -1,17 +1,20 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import express, { Request, Response } from 'express';
+import { ExpressAdapter, NestExpressApplication } from '@nestjs/platform-express';
+import express, { Request, Response, Express } from 'express';
 
-const expressApp = express();
+let cachedApp: INestApplication | null = null;
+let cachedServer: Express | null = null;
 
-let cachedApp: any;
+async function bootstrap(): Promise<Express> {
+  const server = express();
+  const adapter = new ExpressAdapter(server);
 
-async function createNestServer() {
-  const app = await NestFactory.create(
+  const app = await NestFactory.create<NestExpressApplication>(
     AppModule,
-    new ExpressAdapter(expressApp),
+    adapter,
+    { logger: ['error', 'warn', 'log'] },
   );
 
   app.useGlobalPipes(
@@ -30,7 +33,9 @@ async function createNestServer() {
   });
 
   await app.init();
-  return app;
+  cachedApp = app;
+
+  return server;
 }
 
 export default async function handler(req: Request, res: Response) {
@@ -50,18 +55,17 @@ export default async function handler(req: Request, res: Response) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   try {
-    if (!cachedApp) {
-      console.log('Creating NestJS server...');
-      cachedApp = await createNestServer();
-      console.log('NestJS server created successfully');
+    if (!cachedServer) {
+      console.log('Bootstrapping NestJS application...');
+      cachedServer = await bootstrap();
+      console.log('NestJS application ready');
     }
-    expressApp(req, res);
+    cachedServer(req, res);
   } catch (error: any) {
     console.error('Server initialization error:', error);
     res.status(500).json({
       error: 'Server initialization failed',
       message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 }
