@@ -21,19 +21,25 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     try {
-      const [shipmentsRes, statsRes] = await Promise.all([
-        api.get<PaginatedResponse<Shipment>>(`/shipments?page=${page}&limit=10`),
-        api.get<Statistics>('/shipments/statistics'),
+      const [shipmentsRes, statsRes] = await Promise.allSettled([
+        api.get(`/shipments?page=${page}&limit=10`),
+        api.get('/shipments/statistics'),
       ])
-      setShipments(shipmentsRes.data.data)
-      setTotalPages(shipmentsRes.data.meta.totalPages)
-      setStatistics(statsRes.data)
-    } catch (error) {
-      console.error('Failed to load data:', error)
+
+      if (shipmentsRes.status === 'fulfilled') {
+        setShipments(shipmentsRes.value.data)
+      }
+
+      if (statsRes.status === 'fulfilled') {
+        setStatistics(statsRes.value.data)
+      }
+    } catch (e) {
+      console.error(e)
     } finally {
       setIsLoading(false)
     }
   }
+
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
