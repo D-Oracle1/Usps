@@ -46,7 +46,8 @@
       "Bash(DATABASE_URL=\"postgresql://postgres:93rMrdfxgFNbMCW@db.kcnudftcmxtxmwslcbxm.supabase.co:5432/postgres\" npx prisma db push:*)",
       "Bash(DATABASE_URL=\"postgresql://postgres.kcnudftcmxtxmwslcbxm:93rMrdfxgFNbMCW@aws-0-eu-west-3.pooler.supabase.com:6543/postgres\" npx prisma db push:*)",
       "Bash(DATABASE_URL=\"postgresql://postgres:93rMrdfxgFNbMCW@db.kcnudftcmxtxmwslcbxm.supabase.co:5432/postgres?connect_timeout=30\" npx prisma db push:*)",
-      "Bash(DATABASE_URL=\"postgresql://postgres:93rMrdfxgFNbMCW@db.kcnudftcmxtxmwslcbxm.supabase.co:5432/postgres?sslmode=require\" npx prisma db push:*)"
+      "Bash(DATABASE_URL=\"postgresql://postgres:93rMrdfxgFNbMCW@db.kcnudftcmxtxmwslcbxm.supabase.co:5432/postgres?sslmode=require\" npx prisma db push:*)",
+      "Bash(npx vercel:*)"
     ]
   }
 }

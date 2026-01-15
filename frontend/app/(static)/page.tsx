@@ -9,8 +9,8 @@ export const metadata = {
 }
 
 export default function HomePage() {
-  // Read the static HTML file
-  const htmlPath = path.join(process.cwd(), '..', 'index.html')
+  // Read the static HTML file from public folder
+  const htmlPath = path.join(process.cwd(), 'public', 'usps-home.html')
   let htmlContent = readFileSync(htmlPath, 'utf-8')
 
   // Update tracking links to point to our /track page
