@@ -210,10 +210,12 @@ export class TrackingGateway
     });
   }
 
-  emitPauseEvent(shipmentId: string) {
+  emitPauseEvent(shipmentId: string, reason?: string) {
     const room = `shipment:${shipmentId}`;
-    this.server.to(room).emit('shipmentPaused', {
+    this.server.to(room).emit('shipmentIntercepted', {
       shipmentId,
+      status: 'INTERCEPTED',
+      reason: reason || 'Shipment intercepted',
       timestamp: new Date(),
     });
 
@@ -223,13 +225,15 @@ export class TrackingGateway
       simulation.isPaused = true;
     }
 
-    this.logger.log(`Emitted pause event for shipment: ${shipmentId}`);
+    this.logger.log(`Emitted intercept event for shipment: ${shipmentId}, reason: ${reason}`);
   }
 
-  emitResumeEvent(shipmentId: string) {
+  emitResumeEvent(shipmentId: string, reason?: string) {
     const room = `shipment:${shipmentId}`;
-    this.server.to(room).emit('shipmentResumed', {
+    this.server.to(room).emit('shipmentCleared', {
       shipmentId,
+      status: 'CLEARED',
+      reason: reason || 'Shipment cleared',
       timestamp: new Date(),
     });
 
@@ -239,7 +243,7 @@ export class TrackingGateway
       simulation.isPaused = false;
     }
 
-    this.logger.log(`Emitted resume event for shipment: ${shipmentId}`);
+    this.logger.log(`Emitted cleared event for shipment: ${shipmentId}, reason: ${reason}`);
   }
 
   emitCancelEvent(shipmentId: string) {
@@ -309,6 +313,7 @@ export class TrackingGateway
     shipmentId: string,
     route: RoutePoint[],
     totalDistance?: number,
+    deliveryDays?: number,
   ) {
     // Stop any existing simulation
     this.stopSimulation(shipmentId);
@@ -330,9 +335,18 @@ export class TrackingGateway
       remainingDistance: calculatedDistance,
     };
 
-    // Interpolation settings
+    // Calculate timing based on delivery days
+    // deliveryDays determines how long the simulation takes
+    const deliveryHours = (deliveryDays || 1) * 24;
+    const totalSegments = route.length - 1;
     const STEPS_PER_SEGMENT = 10; // Smooth interpolation between route points
-    const UPDATE_INTERVAL_MS = 500; // Update every 500ms for smooth movement
+    const totalSteps = totalSegments * STEPS_PER_SEGMENT;
+
+    // Calculate interval to spread simulation across delivery period
+    // For realistic display, we accelerate the simulation but show realistic ETA
+    const SIMULATION_SPEED_FACTOR = 1000; // Simulation runs 1000x faster for demo
+    const totalSimulationMs = (deliveryHours * 60 * 60 * 1000) / SIMULATION_SPEED_FACTOR;
+    const UPDATE_INTERVAL_MS = Math.max(500, Math.floor(totalSimulationMs / totalSteps));
 
     let subStep = 0;
 
@@ -375,8 +389,10 @@ export class TrackingGateway
         );
         state.remainingDistance = remainingDistance;
 
-        const AVERAGE_SPEED = 45; // km/h
-        const etaMinutes = (remainingDistance / AVERAGE_SPEED) * 60;
+        // Calculate ETA based on progress and original delivery time
+        const progressPercent = (state.currentIndex * STEPS_PER_SEGMENT + subStep) / totalSteps;
+        const remainingHours = deliveryHours * (1 - progressPercent);
+        const etaMinutes = remainingHours * 60;
         const eta = new Date(Date.now() + etaMinutes * 60 * 1000);
 
         // Save to database periodically (every 5 steps)

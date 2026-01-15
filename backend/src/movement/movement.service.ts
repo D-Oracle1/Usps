@@ -249,7 +249,7 @@ export class MovementService {
     return route;
   }
 
-  async startMovement(shipmentId: string, adminId: string) {
+  async startMovement(shipmentId: string, adminId: string, deliveryDays: number) {
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: { movementState: true },
@@ -270,13 +270,16 @@ export class MovementService {
     // Generate route
     const route = this.generateRoute(originCoords, destCoords, 25);
 
-    // Calculate total distance and ETA
+    // Calculate total distance
     const totalDistance = this.calculateTotalRouteDistance(route);
-    const eta = this.pricingService.calculateEta(totalDistance, this.AVERAGE_SPEED);
-    const travelTimeMinutes = this.pricingService.calculateTravelTime(
-      totalDistance,
-      this.AVERAGE_SPEED,
-    );
+
+    // Calculate ETA based on admin-specified delivery days
+    const deliveryHours = deliveryDays * 24;
+    const eta = new Date(Date.now() + deliveryHours * 60 * 60 * 1000);
+
+    // Calculate speed needed to cover distance in the specified time
+    const calculatedSpeed = totalDistance / deliveryHours; // km/h
+    const travelTimeMinutes = deliveryHours * 60;
 
     // Update shipment status with distance and ETA
     await this.prisma.shipment.update({
@@ -287,7 +290,7 @@ export class MovementService {
         remainingDistance: totalDistance,
         estimatedArrival: eta,
         tripStartedAt: new Date(),
-        averageSpeed: this.AVERAGE_SPEED,
+        averageSpeed: calculatedSpeed,
       },
     });
 
@@ -321,8 +324,8 @@ export class MovementService {
       },
     });
 
-    // Start the simulation with distance tracking
-    this.trackingGateway.startRouteSimulation(shipmentId, route, totalDistance);
+    // Start the simulation with distance tracking and delivery duration
+    this.trackingGateway.startRouteSimulation(shipmentId, route, totalDistance, deliveryDays);
 
     return {
       message: 'Trip started successfully',
@@ -333,10 +336,12 @@ export class MovementService {
       remainingDistance: totalDistance,
       estimatedArrival: eta,
       estimatedTravelTime: travelTimeMinutes,
+      deliveryDays,
+      calculatedSpeed,
     };
   }
 
-  async pauseShipment(shipmentId: string, adminId: string) {
+  async pauseShipment(shipmentId: string, adminId: string, reason: string) {
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
@@ -353,7 +358,7 @@ export class MovementService {
     }
 
     if (!shipment.movementState.isMoving) {
-      throw new BadRequestException('Shipment is already paused');
+      throw new BadRequestException('Shipment is already intercepted');
     }
 
     const movementState = await this.prisma.shipmentMovementState.update({
@@ -377,23 +382,24 @@ export class MovementService {
     await this.prisma.trackingEvent.create({
       data: {
         shipmentId,
-        status: 'PAUSED',
-        description: 'Shipment movement paused by admin',
+        status: 'INTERCEPTED',
+        description: `Shipment intercepted: ${reason}`,
         location: shipment.currentLocation || 'Unknown',
         eventTime: new Date(),
         createdBy: adminId,
       },
     });
 
-    this.trackingGateway.emitPauseEvent(shipmentId);
+    this.trackingGateway.emitPauseEvent(shipmentId, reason);
 
     return {
-      message: 'Shipment paused successfully',
+      message: 'Shipment intercepted successfully',
+      reason,
       movementState,
     };
   }
 
-  async resumeShipment(shipmentId: string, adminId: string) {
+  async resumeShipment(shipmentId: string, adminId: string, reason: string) {
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
@@ -424,18 +430,19 @@ export class MovementService {
     await this.prisma.trackingEvent.create({
       data: {
         shipmentId,
-        status: 'RESUMED',
-        description: 'Shipment movement resumed by admin',
+        status: 'CLEARED',
+        description: `Shipment cleared: ${reason}`,
         location: shipment.currentLocation || 'Unknown',
         eventTime: new Date(),
         createdBy: adminId,
       },
     });
 
-    this.trackingGateway.emitResumeEvent(shipmentId);
+    this.trackingGateway.emitResumeEvent(shipmentId, reason);
 
     return {
-      message: 'Shipment resumed successfully',
+      message: 'Shipment cleared successfully',
+      reason,
       movementState,
     };
   }

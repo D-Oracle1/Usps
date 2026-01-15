@@ -118,6 +118,16 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
   const [isCalculatingFee, setIsCalculatingFee] = useState(false)
   const [isApplyingChange, setIsApplyingChange] = useState(false)
 
+  // Delivery timeframe state
+  const [showStartModal, setShowStartModal] = useState(false)
+  const [deliveryDays, setDeliveryDays] = useState<string>('1')
+
+  // Intercept/Clear reason modal state
+  const [showInterceptModal, setShowInterceptModal] = useState(false)
+  const [showClearModal, setShowClearModal] = useState(false)
+  const [interceptReason, setInterceptReason] = useState('')
+  const [clearReason, setClearReason] = useState('')
+
   // Smooth position interpolation using requestAnimationFrame
   const animateToPosition = useCallback((targetLat: number, targetLng: number) => {
     targetPositionRef.current = [targetLat, targetLng]
@@ -284,9 +294,22 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
       }))
     })
 
+    socket.current.on('shipmentIntercepted', (data) => {
+      setIsMoving(false)
+      setShowAddressInput(true) // Show address input when intercepted
+      if (onMovementStateChange) onMovementStateChange()
+    })
+
+    socket.current.on('shipmentCleared', (data) => {
+      setIsMoving(true)
+      setShowAddressInput(false)
+      if (onMovementStateChange) onMovementStateChange()
+    })
+
+    // Keep legacy event handlers for backwards compatibility
     socket.current.on('shipmentPaused', () => {
       setIsMoving(false)
-      setShowAddressInput(true) // Show address input when paused
+      setShowAddressInput(true)
       if (onMovementStateChange) onMovementStateChange()
     })
 
@@ -321,7 +344,8 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     setIsLoading(true)
     setError('')
     try {
-      const response = await api.post(`/movement/${shipment.id}/start`)
+      const days = parseFloat(deliveryDays) || 1
+      const response = await api.post(`/movement/${shipment.id}/start`, { deliveryDays: days })
       setIsMoving(true)
       setHasStarted(true)
       setShipmentStatus('IN_TRANSIT')
@@ -359,6 +383,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
         })
       }
 
+      setShowStartModal(false)
       if (onMovementStateChange) onMovementStateChange()
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to start trip')
@@ -367,31 +392,43 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     }
   }
 
-  // Handle Pause
-  const handlePause = async () => {
+  // Handle Intercept (Pause)
+  const handleIntercept = async () => {
+    if (!interceptReason.trim()) {
+      setError('Please provide a reason for interception')
+      return
+    }
     setIsLoading(true)
     setError('')
     try {
-      await api.post(`/movement/${shipment.id}/pause`)
+      await api.post(`/movement/${shipment.id}/pause`, { reason: interceptReason.trim() })
       setIsMoving(false)
       setShowAddressInput(true)
+      setShowInterceptModal(false)
+      setInterceptReason('')
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to pause')
+      setError(err.response?.data?.message || 'Failed to intercept')
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Handle Resume
-  const handleResume = async () => {
+  // Handle Clear (Resume)
+  const handleClear = async () => {
+    if (!clearReason.trim()) {
+      setError('Please provide a reason for clearance')
+      return
+    }
     setIsLoading(true)
     setError('')
     try {
-      await api.post(`/movement/${shipment.id}/resume`)
+      await api.post(`/movement/${shipment.id}/resume`, { reason: clearReason.trim() })
       setIsMoving(true)
       setShowAddressInput(false)
+      setShowClearModal(false)
+      setClearReason('')
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to resume')
+      setError(err.response?.data?.message || 'Failed to clear')
     } finally {
       setIsLoading(false)
     }
@@ -752,7 +789,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
             {/* Start Button - show when not started */}
             {!hasStarted && (
               <button
-                onClick={handleStart}
+                onClick={() => setShowStartModal(true)}
                 disabled={isLoading}
                 className="flex items-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 w-full justify-center font-semibold transition-all shadow-md"
               >
@@ -761,27 +798,27 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
               </button>
             )}
 
-            {/* Pause Button - show when moving */}
+            {/* Intercept Button - show when moving */}
             {hasStarted && isMoving && (
               <button
-                onClick={handlePause}
+                onClick={() => setShowInterceptModal(true)}
                 disabled={isLoading}
-                className="flex items-center px-4 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50 w-full justify-center font-semibold transition-all shadow-md"
+                className="flex items-center px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 w-full justify-center font-semibold transition-all shadow-md"
               >
                 <Pause className="w-5 h-5 mr-2" fill="white" />
-                Pause Movement
+                Intercept Shipment
               </button>
             )}
 
-            {/* Resume Button - show when paused */}
+            {/* Clear Button - show when intercepted */}
             {isPaused && (
               <button
-                onClick={handleResume}
+                onClick={() => setShowClearModal(true)}
                 disabled={isLoading}
                 className="flex items-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 w-full justify-center font-semibold transition-all shadow-md"
               >
-                <Play className="w-5 h-5 mr-2" fill="white" />
-                Resume Movement
+                <CheckCircle className="w-5 h-5 mr-2" />
+                Clear Shipment
               </button>
             )}
 
@@ -907,7 +944,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
               {isMoving ? 'In Transit' :
                isDelivered ? 'Delivered' :
                isCancelled ? 'Cancelled' :
-               isPaused ? 'Paused' :
+               isPaused ? 'Intercepted' :
                'Ready'}
             </span>
           </div>
@@ -1086,6 +1123,163 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Start Trip Modal */}
+      {showStartModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[2000]">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <Play className="w-5 h-5 mr-2 text-green-600" />
+              Start Trip
+            </h3>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Estimated Delivery Period (Days)
+              </label>
+              <input
+                type="number"
+                min="0.1"
+                step="0.5"
+                value={deliveryDays}
+                onChange={(e) => setDeliveryDays(e.target.value)}
+                placeholder="e.g., 2 for 2 days"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter the expected delivery timeframe. The shipment will be simulated to arrive within this period.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowStartModal(false)
+                  setError('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStart}
+                disabled={isLoading || !deliveryDays || parseFloat(deliveryDays) <= 0}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {isLoading ? 'Starting...' : 'Start Trip'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Intercept Modal */}
+      {showInterceptModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[2000]">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <AlertCircle className="w-5 h-5 mr-2 text-orange-600" />
+              Intercept Shipment
+            </h3>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for Interception *
+              </label>
+              <textarea
+                value={interceptReason}
+                onChange={(e) => setInterceptReason(e.target.value)}
+                placeholder="e.g., Customs inspection required, Security check, Address verification needed..."
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
+
+            {error && (
+              <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowInterceptModal(false)
+                  setInterceptReason('')
+                  setError('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleIntercept}
+                disabled={isLoading || !interceptReason.trim()}
+                className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
+              >
+                {isLoading ? 'Intercepting...' : 'Intercept'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[2000]">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <CheckCircle className="w-5 h-5 mr-2 text-green-600" />
+              Clear Shipment
+            </h3>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for Clearance *
+              </label>
+              <textarea
+                value={clearReason}
+                onChange={(e) => setClearReason(e.target.value)}
+                placeholder="e.g., Inspection passed, Documents verified, Issue resolved..."
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            {error && (
+              <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowClearModal(false)
+                  setClearReason('')
+                  setError('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClear}
+                disabled={isLoading || !clearReason.trim()}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {isLoading ? 'Clearing...' : 'Clear & Resume'}
+              </button>
+            </div>
           </div>
         </div>
       )}

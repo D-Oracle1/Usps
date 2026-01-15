@@ -1,21 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Search, Package, MapPin, Clock, Truck, AlertCircle } from 'lucide-react'
 import api from '@/lib/api'
 import type { Shipment, TrackingEvent } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
 
-export default function PublicTrackingPage() {
+// Inner component that uses useSearchParams
+function TrackingPageContent() {
+  const searchParams = useSearchParams()
   const [trackingNumber, setTrackingNumber] = useState('')
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [events, setEvents] = useState<TrackingEvent[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Auto-search when tracking number is provided via URL params
+  useEffect(() => {
+    const urlTrackingNumber = searchParams.get('trackingNumber') || searchParams.get('keyword')
+    if (urlTrackingNumber) {
+      setTrackingNumber(urlTrackingNumber)
+      performSearch(urlTrackingNumber)
+    }
+  }, [searchParams])
+
+  const performSearch = async (number: string) => {
     setError('')
     setIsLoading(true)
     setShipment(null)
@@ -23,7 +34,7 @@ export default function PublicTrackingPage() {
 
     try {
       const response = await api.get<{ shipment: Shipment; events: TrackingEvent[] }>(
-        `/tracking/public/${trackingNumber}`
+        `/tracking/public/${number}`
       )
       setShipment(response.data.shipment)
       setEvents(response.data.events)
@@ -32,6 +43,11 @@ export default function PublicTrackingPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    performSearch(trackingNumber)
   }
 
   const getStatusColor = (status: string) => {
@@ -171,6 +187,16 @@ export default function PublicTrackingPage() {
                   </div>
                 </div>
               </div>
+
+              {shipment.goodsDescription && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="text-sm text-gray-500 mb-2">Package Contents</div>
+                  <div className="flex items-start">
+                    <Package className="w-5 h-5 text-[#336699] mr-2 mt-0.5 flex-shrink-0" />
+                    <span className="font-medium text-gray-900">{shipment.goodsDescription}</span>
+                  </div>
+                </div>
+              )}
 
               {shipment.currentLocation && (
                 <div className="mt-6 pt-6 border-t border-gray-200">
@@ -322,5 +348,21 @@ export default function PublicTrackingPage() {
         </div>
       </footer>
     </div>
+  )
+}
+
+// Main component wrapped with Suspense for useSearchParams
+export default function PublicTrackingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#f5f5f5] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#333366] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <TrackingPageContent />
+    </Suspense>
   )
 }
