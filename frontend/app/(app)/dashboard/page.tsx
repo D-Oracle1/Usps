@@ -27,7 +27,16 @@ export default function DashboardPage() {
       ])
 
       if (shipmentsRes.status === 'fulfilled') {
-        setShipments(shipmentsRes.value.data)
+        const data = shipmentsRes.value.data
+        // Handle both array and paginated response formats
+        if (Array.isArray(data)) {
+          setShipments(data)
+        } else if (data && Array.isArray(data.data)) {
+          setShipments(data.data)
+          if (data.totalPages) setTotalPages(data.totalPages)
+        } else {
+          setShipments([])
+        }
       }
 
       if (statsRes.status === 'fulfilled') {
