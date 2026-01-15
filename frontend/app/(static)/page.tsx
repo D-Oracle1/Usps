@@ -29,7 +29,10 @@ export default function HomePage() {
 
   // Extract body content
   const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*)<\/body>/i)
-  const bodyContent = bodyMatch ? bodyMatch[1] : ''
+  let bodyContent = bodyMatch ? bodyMatch[1] : ''
+
+  // Remove script tags to prevent client-side errors
+  bodyContent = bodyContent.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 
   // Extract all style blocks (both in head and inline in body)
   const allStyleMatches = htmlContent.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || []
