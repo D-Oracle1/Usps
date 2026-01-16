@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Package, Plus, ArrowLeft } from 'lucide-react'
+import { Send, Package, Plus, ArrowLeft, RefreshCw } from 'lucide-react'
 import { useSupportAuth } from '@/lib/support-auth-context'
 import { getSupportSocket, disconnectSupportSocket } from '@/lib/support-socket'
 import { Conversation, Message } from '@/lib/support-types'
@@ -19,8 +19,15 @@ export default function ChatWindow() {
   const [showNewChat, setShowNewChat] = useState(false)
   const [trackingNumber, setTrackingNumber] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [isConnected, setIsConnected] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>(null)
+  const activeConversationRef = useRef<string | null>(null)
+
+  // Keep activeConversationRef in sync
+  useEffect(() => {
+    activeConversationRef.current = activeConversation?.id || null
+  }, [activeConversation])
 
   // Load conversations on mount
   useEffect(() => {
@@ -29,34 +36,76 @@ export default function ChatWindow() {
     }
   }, [token])
 
-  // Setup WebSocket
+  // Setup WebSocket - this effect handles socket connection and event listeners
   useEffect(() => {
     if (!token) return
 
     const socket = getSupportSocket(token)
 
-    socket.on('newMessage', (message: Message) => {
-      if (activeConversation && message.conversationId === activeConversation.id) {
-        setMessages(prev => [...prev, message])
+    const handleConnect = () => {
+      setIsConnected(true)
+      // Rejoin conversation room if we have an active conversation
+      if (activeConversationRef.current) {
+        socket.emit('joinConversation', { conversationId: activeConversationRef.current })
       }
-      // Refresh conversations list
-      loadConversations()
-    })
+    }
 
-    socket.on('userTyping', (data: { isTyping: boolean; userType: string }) => {
-      if (data.userType === 'ADMIN' || data.userType === 'admin') {
+    const handleDisconnect = () => {
+      setIsConnected(false)
+    }
+
+    const handleNewMessage = (message: Message) => {
+      // Check using ref to avoid stale closure
+      if (activeConversationRef.current && message.conversationId === activeConversationRef.current) {
+        setMessages(prev => {
+          // Prevent duplicate messages
+          if (prev.some(m => m.id === message.id)) {
+            return prev
+          }
+          return [...prev, message]
+        })
+      }
+      // Refresh conversations list to show latest message preview
+      loadConversations()
+    }
+
+    const handleUserTyping = (data: { conversationId: string; isTyping: boolean; userType: string }) => {
+      // Only show typing indicator for admin messages in the active conversation
+      if (activeConversationRef.current === data.conversationId &&
+          (data.userType === 'ADMIN' || data.userType === 'admin')) {
         setIsTyping(data.isTyping)
       }
-    })
+    }
 
-    socket.on('messagesRead', () => {
-      setMessages(prev => prev.map(m => ({ ...m, isRead: true })))
-    })
+    const handleMessagesRead = (data: { conversationId: string; readByType: string }) => {
+      // Update read status when admin reads our messages
+      if (activeConversationRef.current === data.conversationId && data.readByType === 'admin') {
+        setMessages(prev => prev.map(m =>
+          m.senderType === 'USER' ? { ...m, isRead: true } : m
+        ))
+      }
+    }
+
+    // Set up listeners
+    socket.on('connect', handleConnect)
+    socket.on('disconnect', handleDisconnect)
+    socket.on('newMessage', handleNewMessage)
+    socket.on('userTyping', handleUserTyping)
+    socket.on('messagesRead', handleMessagesRead)
+
+    // Check if already connected
+    if (socket.connected) {
+      setIsConnected(true)
+    }
 
     return () => {
-      disconnectSupportSocket()
+      socket.off('connect', handleConnect)
+      socket.off('disconnect', handleDisconnect)
+      socket.off('newMessage', handleNewMessage)
+      socket.off('userTyping', handleUserTyping)
+      socket.off('messagesRead', handleMessagesRead)
     }
-  }, [token, activeConversation])
+  }, [token])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -233,26 +282,39 @@ export default function ChatWindow() {
       {/* Conversation selector (if multiple) */}
       {conversations.length > 1 && (
         <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-          <select
-            value={activeConversation?.id || ''}
-            onChange={(e) => {
-              const conv = conversations.find(c => c.id === e.target.value)
-              if (conv) selectConversation(conv)
-            }}
-            className="flex-1 text-sm bg-transparent border-none focus:outline-none cursor-pointer"
-          >
-            {conversations.map(conv => (
-              <option key={conv.id} value={conv.id}>
-                {conv.trackingNumber ? `#${conv.trackingNumber}` : `Chat ${conv.id.slice(0, 8)}`}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => setShowNewChat(true)}
-            className="p-1.5 text-gray-500 hover:text-[#333366] hover:bg-gray-200 rounded"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+          <div className="flex items-center flex-1">
+            <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
+                 title={isConnected ? 'Connected' : 'Disconnected'} />
+            <select
+              value={activeConversation?.id || ''}
+              onChange={(e) => {
+                const conv = conversations.find(c => c.id === e.target.value)
+                if (conv) selectConversation(conv)
+              }}
+              className="flex-1 text-sm bg-transparent border-none focus:outline-none cursor-pointer"
+            >
+              {conversations.map(conv => (
+                <option key={conv.id} value={conv.id}>
+                  {conv.trackingNumber ? `#${conv.trackingNumber}` : `Chat ${conv.id.slice(0, 8)}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => activeConversation && selectConversation(activeConversation)}
+              className="p-1.5 text-gray-500 hover:text-[#333366] hover:bg-gray-200 rounded"
+              title="Refresh messages"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowNewChat(true)}
+              className="p-1.5 text-gray-500 hover:text-[#333366] hover:bg-gray-200 rounded"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 

@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 import type { Shipment, Location as LocationType, AddressChangeFeeCalculation } from '@/lib/types'
-import { Play, Pause, Square, MapPin, Navigation, Truck, AlertCircle, CheckCircle, Search, X, Clock, Route, DollarSign } from 'lucide-react'
+import { Play, Pause, Square, MapPin, Navigation, Truck, AlertCircle, CheckCircle, Search, X, Clock, Route, DollarSign, FastForward } from 'lucide-react'
 import api from '@/lib/api'
 import dynamic from 'next/dynamic'
+import { useTimeBasedMarkerMovement, haversineDistance } from '@/hooks/useTimeBasedMarkerMovement'
 
 // Dynamically import Leaflet components
 const MapContainer = dynamic(
@@ -77,20 +78,15 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
 
 export default function ShipmentMap({ shipment, onMovementStateChange }: ShipmentMapProps) {
   const socket = useRef<Socket | null>(null)
-  const animationRef = useRef<number | null>(null)
-  const targetPositionRef = useRef<[number, number]>([39.8283, -98.5795])
 
   const [isMoving, setIsMoving] = useState(shipment.movementState?.isMoving ?? false)
   const [currentLocation, setCurrentLocation] = useState<LocationType | null>(null)
-  const [position, setPosition] = useState<[number, number]>([39.8283, -98.5795])
-  const [animatedPosition, setAnimatedPosition] = useState<[number, number]>([39.8283, -98.5795])
   const [isLoading, setIsLoading] = useState(false)
   const [wsConnected, setWsConnected] = useState(false)
   const [mapReady, setMapReady] = useState(false)
   const [route, setRoute] = useState<Array<[number, number]>>([])
   const [originPosition, setOriginPosition] = useState<[number, number] | null>(null)
   const [destPosition, setDestPosition] = useState<[number, number] | null>(null)
-  const [progress, setProgress] = useState(0)
   const [shipmentStatus, setShipmentStatus] = useState(shipment.currentStatus)
   const [error, setError] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
@@ -128,53 +124,82 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
   const [interceptReason, setInterceptReason] = useState('')
   const [clearReason, setClearReason] = useState('')
 
-  // Smooth position interpolation with improved stability
-  const animateToPosition = useCallback((targetLat: number, targetLng: number) => {
-    targetPositionRef.current = [targetLat, targetLng]
+  // Speed multiplier for testing (1 = normal, higher = faster)
+  const [speedMultiplier, setSpeedMultiplier] = useState(1)
+  const [showSpeedControl, setShowSpeedControl] = useState(false)
 
-    // Cancel any existing animation
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current)
-      animationRef.current = null
-    }
+  // Animation configuration
+  const [animationConfig, setAnimationConfig] = useState<{
+    startPosition: { lat: number; lng: number }
+    endPosition: { lat: number; lng: number }
+    durationMs: number
+  } | null>(null)
 
-    let lastTime = performance.now()
-
-    const animate = (currentTime: number) => {
-      // Throttle to ~30fps for stability
-      const deltaTime = currentTime - lastTime
-      if (deltaTime < 33) {
-        animationRef.current = requestAnimationFrame(animate)
-        return
-      }
-      lastTime = currentTime
-
-      setAnimatedPosition(current => {
-        const [currentLat, currentLng] = current
-        const [tLat, tLng] = targetPositionRef.current
-
-        const diffLat = tLat - currentLat
-        const diffLng = tLng - currentLng
-
-        // Use smaller factor for smoother, more stable animation
-        const factor = 0.08
-
-        // Check if we're close enough to snap to target
-        if (Math.abs(diffLat) < 0.00001 && Math.abs(diffLng) < 0.00001) {
-          return [tLat, tLng]
-        }
-
-        return [
-          currentLat + diffLat * factor,
-          currentLng + diffLng * factor
-        ]
+  // Time-based marker movement hook
+  const {
+    state: movementState,
+    start: startAnimation,
+    pause: pauseAnimation,
+    resume: resumeAnimation,
+    reset: resetAnimation,
+    setSpeedMultiplier: updateSpeedMultiplier,
+    jumpToProgress,
+  } = useTimeBasedMarkerMovement({
+    startPosition: animationConfig?.startPosition || { lat: 39.8283, lng: -98.5795 },
+    endPosition: animationConfig?.endPosition || { lat: 39.8283, lng: -98.5795 },
+    durationMs: animationConfig?.durationMs || 86400000, // Default 1 day
+    speedMultiplier,
+    onPositionUpdate: (position, progress) => {
+      // Update current location for display
+      setCurrentLocation({
+        id: 'animated',
+        shipmentId: shipment.id,
+        latitude: position.lat,
+        longitude: position.lng,
+        speed: null,
+        heading: null,
+        recordedAt: new Date().toISOString()
       })
 
-      animationRef.current = requestAnimationFrame(animate)
-    }
+      // Update distance tracking
+      if (animationConfig) {
+        const totalDist = haversineDistance(
+          animationConfig.startPosition,
+          animationConfig.endPosition
+        )
+        setDistance({
+          total: totalDist,
+          covered: totalDist * progress,
+          remaining: totalDist * (1 - progress),
+        })
 
-    animationRef.current = requestAnimationFrame(animate)
-  }, [])
+        // Update ETA
+        const remainingMs = movementState.remainingMs / speedMultiplier
+        const remainingMinutes = remainingMs / 60000
+        setEta({
+          arrival: new Date(Date.now() + remainingMs),
+          minutesRemaining: remainingMinutes,
+        })
+      }
+    },
+    onComplete: () => {
+      setIsMoving(false)
+      setShipmentStatus('DELIVERED')
+      if (onMovementStateChange) onMovementStateChange()
+    },
+  })
+
+  // Current animated position for the marker
+  const animatedPosition: [number, number] = [
+    movementState.currentPosition.lat,
+    movementState.currentPosition.lng
+  ]
+  const progress = movementState.progress * 100
+
+  // Update speed multiplier when it changes
+  useEffect(() => {
+    updateSpeedMultiplier(speedMultiplier)
+  }, [speedMultiplier, updateSpeedMultiplier])
 
   // Load initial route on mount
   useEffect(() => {
@@ -198,14 +223,12 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
           setRoute([originCoords, destCoords])
         }
 
-        // Set initial position
-        if (currentPosition) {
-          setPosition([currentPosition.lat, currentPosition.lng])
-          setAnimatedPosition([currentPosition.lat, currentPosition.lng])
-        } else {
-          setPosition(originCoords)
-          setAnimatedPosition(originCoords)
-        }
+        // Set initial animation config
+        setAnimationConfig({
+          startPosition: { lat: origin.lat, lng: origin.lng },
+          endPosition: { lat: destination.lat, lng: destination.lng },
+          durationMs: 86400000, // Default 1 day, will be updated when trip starts
+        })
 
         // Check if movement has already started
         if (shipment.currentStatus === 'IN_TRANSIT') {
@@ -213,19 +236,11 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
         }
       } catch (err) {
         console.error('Failed to load route:', err)
-        setPosition([39.8283, -98.5795])
-        setAnimatedPosition([39.8283, -98.5795])
       }
       setMapReady(true)
     }
 
     loadRoute()
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current)
-      }
-    }
   }, [shipment.id, shipment.currentStatus])
 
   // WebSocket connection
@@ -255,67 +270,31 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
         setHasStarted(true)
       }
       if (data.currentLocation) {
-        const lat = data.currentLocation.latitude
-        const lng = data.currentLocation.longitude
-        setPosition([lat, lng])
-        animateToPosition(lat, lng)
         setCurrentLocation(data.currentLocation)
-      }
-    })
-
-    socket.current.on('locationUpdate', (data) => {
-      const lat = data.latitude
-      const lng = data.longitude
-
-      animateToPosition(lat, lng)
-      setPosition([lat, lng])
-
-      setCurrentLocation({
-        id: 'current',
-        shipmentId: shipment.id,
-        latitude: lat,
-        longitude: lng,
-        speed: data.speed ?? null,
-        heading: data.heading ?? null,
-        recordedAt: new Date().toISOString()
-      })
-
-      if (data.progress) {
-        setProgress(data.progress.percentComplete)
-      }
-
-      // Update distance and ETA from WebSocket data
-      if (data.distance) {
-        setDistance(data.distance)
-      }
-      if (data.eta) {
-        setEta({
-          arrival: new Date(data.eta.arrival),
-          minutesRemaining: data.eta.minutesRemaining,
-        })
       }
     })
 
     // Listen for address change events
     socket.current.on('addressChanged', (data) => {
-      setEta({
-        arrival: new Date(data.newEta),
-        minutesRemaining: Math.round((data.newRemainingDistance / 45) * 60),
-      })
-      setDistance((prev) => ({
-        ...prev,
-        remaining: data.newRemainingDistance,
-      }))
+      // Update destination and recalculate
+      if (data.newDestination) {
+        setAnimationConfig(prev => prev ? {
+          ...prev,
+          endPosition: { lat: data.newDestination.lat, lng: data.newDestination.lng },
+        } : null)
+      }
     })
 
-    socket.current.on('shipmentIntercepted', (data) => {
+    socket.current.on('shipmentIntercepted', () => {
       setIsMoving(false)
-      setShowAddressInput(true) // Show address input when intercepted
+      pauseAnimation() // Pause the time-based animation
+      setShowAddressInput(true)
       if (onMovementStateChange) onMovementStateChange()
     })
 
-    socket.current.on('shipmentCleared', (data) => {
+    socket.current.on('shipmentCleared', () => {
       setIsMoving(true)
+      resumeAnimation() // Resume the time-based animation
       setShowAddressInput(false)
       if (onMovementStateChange) onMovementStateChange()
     })
@@ -323,18 +302,21 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     // Keep legacy event handlers for backwards compatibility
     socket.current.on('shipmentPaused', () => {
       setIsMoving(false)
+      pauseAnimation()
       setShowAddressInput(true)
       if (onMovementStateChange) onMovementStateChange()
     })
 
     socket.current.on('shipmentResumed', () => {
       setIsMoving(true)
+      resumeAnimation()
       setShowAddressInput(false)
       if (onMovementStateChange) onMovementStateChange()
     })
 
     socket.current.on('shipmentCancelled', () => {
       setIsMoving(false)
+      resetAnimation()
       setShipmentStatus('CANCELLED')
       setShowAddressInput(false)
       if (onMovementStateChange) onMovementStateChange()
@@ -351,7 +333,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
       socket.current?.emit('leaveShipment', { shipmentId: shipment.id })
       socket.current?.disconnect()
     }
-  }, [shipment.id, onMovementStateChange, animateToPosition])
+  }, [shipment.id, onMovementStateChange, pauseAnimation, resumeAnimation, resetAnimation])
 
   // Handle Start Trip
   const handleStart = async () => {
@@ -360,9 +342,6 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     try {
       const days = parseFloat(deliveryDays) || 1
       const response = await api.post(`/movement/${shipment.id}/start`, { deliveryDays: days })
-      setIsMoving(true)
-      setHasStarted(true)
-      setShipmentStatus('IN_TRANSIT')
 
       // Update route with road routing
       if (response.data.origin && response.data.destination) {
@@ -371,32 +350,52 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
 
         setOriginPosition(originCoords)
         setDestPosition(destCoords)
-        setPosition(originCoords)
-        setAnimatedPosition(originCoords)
 
         // Get road route
         const roadRoute = await getRouteFromOSRM(originCoords, destCoords)
         if (roadRoute.length > 0) {
           setRoute(roadRoute)
         }
-      }
 
-      // Set initial distance and ETA from response
-      if (response.data.totalDistance) {
+        // Calculate duration in milliseconds from delivery days
+        // For testing, we use speedMultiplier to accelerate
+        const durationMs = days * 24 * 60 * 60 * 1000
+
+        // Update animation configuration
+        setAnimationConfig({
+          startPosition: { lat: response.data.origin.lat, lng: response.data.origin.lng },
+          endPosition: { lat: response.data.destination.lat, lng: response.data.destination.lng },
+          durationMs,
+        })
+
+        // Calculate initial distance
+        const totalDist = haversineDistance(
+          { lat: response.data.origin.lat, lng: response.data.origin.lng },
+          { lat: response.data.destination.lat, lng: response.data.destination.lng }
+        )
         setDistance({
-          total: response.data.totalDistance,
-          remaining: response.data.remainingDistance || response.data.totalDistance,
+          total: totalDist,
+          remaining: totalDist,
           covered: 0,
         })
-      }
-      if (response.data.estimatedArrival) {
-        const arrivalDate = new Date(response.data.estimatedArrival)
+
+        // Set initial ETA
+        const arrivalDate = new Date(Date.now() + durationMs / speedMultiplier)
         setEta({
           arrival: arrivalDate,
-          minutesRemaining: response.data.estimatedTravelTime || Math.round((response.data.totalDistance / 45) * 60),
+          minutesRemaining: (durationMs / speedMultiplier) / 60000,
         })
       }
 
+      // Start the time-based animation
+      // Small delay to ensure config is set
+      setTimeout(() => {
+        startAnimation()
+      }, 100)
+
+      setIsMoving(true)
+      setHasStarted(true)
+      setShipmentStatus('IN_TRANSIT')
       setShowStartModal(false)
       if (onMovementStateChange) onMovementStateChange()
     } catch (err: any) {
@@ -416,6 +415,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     setError('')
     try {
       await api.post(`/movement/${shipment.id}/pause`, { reason: interceptReason.trim() })
+      pauseAnimation() // Pause the time-based animation
       setIsMoving(false)
       setShowAddressInput(true)
       setShowInterceptModal(false)
@@ -437,6 +437,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     setError('')
     try {
       await api.post(`/movement/${shipment.id}/resume`, { reason: clearReason.trim() })
+      resumeAnimation() // Resume the time-based animation
       setIsMoving(true)
       setShowAddressInput(false)
       setShowClearModal(false)
@@ -963,6 +964,44 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
             </span>
           </div>
         </div>
+
+        {/* Speed Control for Testing */}
+        {hasStarted && !isDelivered && !isCancelled && (
+          <div className="pt-3 border-t">
+            <button
+              onClick={() => setShowSpeedControl(!showSpeedControl)}
+              className="flex items-center text-xs text-gray-500 hover:text-[#333366] transition-colors"
+            >
+              <FastForward className="w-3 h-3 mr-1" />
+              Speed Control (Testing)
+            </button>
+            {showSpeedControl && (
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600">Speed: {speedMultiplier}x</span>
+                </div>
+                <div className="flex gap-1">
+                  {[1, 10, 100, 1000, 10000].map((mult) => (
+                    <button
+                      key={mult}
+                      onClick={() => setSpeedMultiplier(mult)}
+                      className={`px-2 py-1 text-xs rounded ${
+                        speedMultiplier === mult
+                          ? 'bg-[#333366] text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {mult}x
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400">
+                  Higher values simulate faster delivery for testing
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Current Location Data */}
         {currentLocation && (
