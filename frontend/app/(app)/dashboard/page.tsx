@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [statistics, setStatistics] = useState<Statistics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
@@ -20,6 +21,7 @@ export default function DashboardPage() {
   }, [page])
 
   const loadData = async () => {
+    setError(null)
     try {
       const [shipmentsRes, statsRes] = await Promise.allSettled([
         api.get(`/shipments?page=${page}&limit=10`),
@@ -33,17 +35,32 @@ export default function DashboardPage() {
           setShipments(data)
         } else if (data && Array.isArray(data.data)) {
           setShipments(data.data)
-          if (data.totalPages) setTotalPages(data.totalPages)
+          // Backend returns { data: [], meta: { totalPages } }
+          if (data.meta?.totalPages) {
+            setTotalPages(data.meta.totalPages)
+          } else if (data.totalPages) {
+            setTotalPages(data.totalPages)
+          }
         } else {
           setShipments([])
         }
+      } else {
+        // Shipments failed to load
+        const reason = shipmentsRes.reason
+        const errorMsg = reason?.response?.data?.message || reason?.message || 'Failed to load shipments'
+        setError(errorMsg)
+        console.error('Failed to load shipments:', reason)
       }
 
       if (statsRes.status === 'fulfilled') {
         setStatistics(statsRes.value.data)
+      } else {
+        // Statistics failed - log but don't block UI
+        console.error('Failed to load statistics:', statsRes.reason)
       }
-    } catch (e) {
-      console.error(e)
+    } catch (e: any) {
+      console.error('Dashboard load error:', e)
+      setError(e.message || 'An unexpected error occurred')
     } finally {
       setIsLoading(false)
     }
@@ -82,6 +99,23 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-sm font-medium text-red-800">Error loading shipments</h3>
+            <p className="text-sm text-red-700 mt-1">{error}</p>
+            <button
+              onClick={loadData}
+              className="mt-2 text-sm font-medium text-red-800 hover:text-red-900 underline"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

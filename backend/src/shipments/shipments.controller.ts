@@ -34,10 +34,17 @@ export class ShipmentsController {
     );
   }
 
+  // Static routes MUST come before parameterized routes
   @Get('statistics')
   @Roles('ADMIN', 'SUPER_ADMIN')
   getStatistics() {
     return this.shipmentsService.getStatistics();
+  }
+
+  @Get('export')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  exportShipments() {
+    return this.shipmentsService.exportShipments();
   }
 
   @Get('tracking/:trackingNumber')
@@ -45,6 +52,19 @@ export class ShipmentsController {
     return this.shipmentsService.findByTrackingNumber(trackingNumber);
   }
 
+  @Post('bulk/update-status')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  bulkUpdateStatus(@Body() body: { shipmentIds: string[]; status: string }) {
+    return this.shipmentsService.bulkUpdateStatus(body.shipmentIds, body.status);
+  }
+
+  @Post('bulk/delete')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  bulkDelete(@Body() body: { shipmentIds: string[] }) {
+    return this.shipmentsService.bulkDelete(body.shipmentIds);
+  }
+
+  // Parameterized routes come AFTER all static routes
   @Get(':id')
   @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
   findOne(@Param('id') id: string) {
@@ -61,23 +81,5 @@ export class ShipmentsController {
   @Roles('ADMIN', 'SUPER_ADMIN')
   remove(@Param('id') id: string) {
     return this.shipmentsService.remove(id);
-  }
-
-  @Post('bulk/update-status')
-  @Roles('ADMIN', 'SUPER_ADMIN')
-  bulkUpdateStatus(@Body() body: { shipmentIds: string[]; status: string }) {
-    return this.shipmentsService.bulkUpdateStatus(body.shipmentIds, body.status);
-  }
-
-  @Post('bulk/delete')
-  @Roles('ADMIN', 'SUPER_ADMIN')
-  bulkDelete(@Body() body: { shipmentIds: string[] }) {
-    return this.shipmentsService.bulkDelete(body.shipmentIds);
-  }
-
-  @Get('export')
-  @Roles('ADMIN', 'SUPER_ADMIN')
-  exportShipments() {
-    return this.shipmentsService.exportShipments();
   }
 }

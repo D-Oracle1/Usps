@@ -725,6 +725,103 @@ export class MovementService {
     };
   }
 
+  // Manually update location (admin drag marker)
+  async updateLocationManually(
+    shipmentId: string,
+    adminId: string,
+    latitude: number,
+    longitude: number,
+    addressLabel?: string,
+  ) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: { movementState: true },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Shipment not found');
+    }
+
+    if (shipment.currentStatus === 'DELIVERED' || shipment.currentStatus === 'CANCELLED') {
+      throw new BadRequestException('Cannot update location for delivered or cancelled shipment');
+    }
+
+    // Get destination coordinates
+    const destCoords = this.getCoordinatesFromLocation(shipment.destinationLocation);
+
+    // Calculate new remaining distance
+    const newRemainingDistance = this.calculateHaversineDistance(
+      latitude,
+      longitude,
+      destCoords.lat,
+      destCoords.lng,
+    );
+
+    // Calculate new ETA based on average speed
+    const avgSpeed = shipment.averageSpeed || this.AVERAGE_SPEED;
+    const hoursRemaining = newRemainingDistance / avgSpeed;
+    const newEta = new Date(Date.now() + hoursRemaining * 60 * 60 * 1000);
+
+    // Build location string
+    const locationString = addressLabel
+      ? `${addressLabel} (${latitude.toFixed(5)},${longitude.toFixed(5)})`
+      : `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
+
+    // Record new location
+    await this.prisma.shipmentLocation.create({
+      data: {
+        shipmentId,
+        latitude,
+        longitude,
+        speed: 0,
+        heading: 0,
+      },
+    });
+
+    // Update shipment with new location and ETA
+    const updatedShipment = await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: {
+        currentLocation: locationString,
+        remainingDistance: newRemainingDistance,
+        estimatedArrival: newEta,
+      },
+    });
+
+    // Create tracking event for manual location update
+    await this.prisma.trackingEvent.create({
+      data: {
+        shipmentId,
+        status: 'LOCATION_UPDATED',
+        description: `Location manually updated by admin`,
+        location: locationString,
+        eventTime: new Date(),
+        createdBy: adminId,
+      },
+    });
+
+    // Emit location update via websocket
+    this.trackingGateway.emitLocationUpdate(shipmentId, {
+      latitude,
+      longitude,
+      remainingDistance: newRemainingDistance,
+      estimatedArrival: newEta,
+      currentLocation: locationString,
+    });
+
+    return {
+      message: 'Location updated successfully',
+      location: {
+        latitude,
+        longitude,
+        label: locationString,
+      },
+      remainingDistance: newRemainingDistance,
+      estimatedArrival: newEta,
+      totalDistance: shipment.totalDistance,
+    };
+  }
+
   // Get current trip info with distance and ETA
   async getTripInfo(shipmentId: string) {
     const shipment = await this.prisma.shipment.findUnique({

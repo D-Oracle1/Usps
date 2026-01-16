@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { CreateAdminDto, LoginDto } from './dto/auth.dto';
 
@@ -60,7 +61,7 @@ export class AuthService {
         name: createAdminDto.name,
         email: createAdminDto.email,
         passwordHash: hashedPassword,
-        role: 'USER',
+        role: UserRole.USER,
       },
     });
 
@@ -83,6 +84,26 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
+
+    return user;
+  }
+
+  async updateUserRole(userId: string, role: string) {
+    const validRoles = ['USER', 'ADMIN', 'SUPER_ADMIN'];
+    if (!validRoles.includes(role)) {
+      throw new UnauthorizedException('Invalid role');
+    }
+
+    const user = await this.prisma.adminUser.update({
+      where: { id: userId },
+      data: { role: role as any },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
 
     return user;
   }

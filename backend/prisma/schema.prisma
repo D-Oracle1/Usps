@@ -43,7 +43,6 @@ model SupportUser {
 
   // Relations
   conversations Conversation[]
-  messages      Message[]
 
   @@map("support_users")
 }
@@ -86,7 +85,8 @@ model Message {
 
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  supportUser  SupportUser? @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  // Note: senderId can be either SupportUser.id or AdminUser.id depending on senderType
+  // No foreign key constraint to allow both user types
 
   @@index([conversationId])
   @@index([senderId])

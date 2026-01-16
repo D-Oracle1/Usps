@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
@@ -131,20 +132,36 @@ export class SupportService {
   // ============ Message Operations ============
 
   async createMessage(dto: CreateMessageDto, senderId: string, senderType: SenderType) {
-    const message = await this.prisma.message.create({
-      data: {
-        conversationId: dto.conversationId,
-        senderId,
-        senderType,
-        content: dto.content,
-        messageType: dto.messageType || 'TEXT',
-      },
-    });
+    // Use raw query to bypass foreign key constraint for admin messages
+    const messageId = randomUUID();
+    const now = new Date();
+    const messageType = dto.messageType || 'TEXT';
+
+    // Cast enum values as strings - Prisma will handle the enum conversion
+    const senderTypeStr = senderType.toString();
+    const messageTypeStr = messageType.toString();
+
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO messages (id, conversation_id, sender_id, sender_type, content, message_type, is_read, created_at)
+       VALUES ($1, $2, $3, $4::"SenderType", $5, $6::"MessageType", false, $7)`,
+      messageId,
+      dto.conversationId,
+      senderId,
+      senderTypeStr,
+      dto.content,
+      messageTypeStr,
+      now
+    );
 
     // Update conversation lastMessageAt
     await this.prisma.conversation.update({
       where: { id: dto.conversationId },
-      data: { lastMessageAt: new Date() },
+      data: { lastMessageAt: now },
+    });
+
+    // Return the created message
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
     });
 
     return message;
