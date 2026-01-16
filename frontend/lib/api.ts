@@ -11,9 +11,21 @@ export const api = axios.create({
 
 // Add auth token to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+  // Check if this is a support endpoint
+  const isSupportEndpoint = config.url?.includes('/support/')
+
+  if (isSupportEndpoint) {
+    // Use support auth token for support endpoints
+    const supportToken = localStorage.getItem('support_auth_token')
+    if (supportToken) {
+      config.headers.Authorization = `Bearer ${supportToken}`
+    }
+  } else {
+    // Use admin auth token for other endpoints
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
   }
   return config
 })
@@ -22,10 +34,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Only redirect to login for admin endpoints, not support endpoints
+    const isSupportEndpoint = error.config?.url?.includes('/support/')
+
+    if (error.response?.status === 401 && !isSupportEndpoint) {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user')
-      window.location.href = '/auth/login'
+      // Only redirect if we're on an admin page
+      if (window.location.pathname.startsWith('/dashboard')) {
+        window.location.href = '/auth/login'
+      }
     }
     return Promise.reject(error)
   }
