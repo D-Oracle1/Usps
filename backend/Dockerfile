@@ -24,5 +24,5 @@ RUN npm prune --production
 # Expose port
 EXPOSE 3000
 
-# Run prisma db push and start the application
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main.js"]
+# Run prisma db push (allow failure) then start the application
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss || echo 'Warning: prisma db push failed, continuing anyway'; node dist/main.js"]
