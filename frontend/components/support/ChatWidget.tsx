@@ -20,7 +20,8 @@ export default function ChatWidget() {
     }
   }, [isOpen])
 
-  const handleToggle = () => {
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation()
     if (!user) {
       setShowAuthModal(true)
     } else {

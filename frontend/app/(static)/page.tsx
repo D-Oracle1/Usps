@@ -20,52 +20,52 @@ export default function HomePage() {
     '/track'
   )
 
-  // Update login/register links to point to our auth pages
+  // Remove login/register links (admin portal access removed from public site)
   htmlContent = htmlContent.replace(
     /https:\/\/reg\.usps\.com\/entreg\/LoginAction_input[^"']*/g,
-    '/auth/login'
+    '#'
   )
   htmlContent = htmlContent.replace(
     /https:\/\/reg\.usps\.com\/entreg\/RegistrationAction_input[^"']*/g,
-    '/auth/register'
+    '#'
   )
   htmlContent = htmlContent.replace(
     /https:\/\/reg\.usps\.com[^"']*/g,
-    '/auth/login'
+    '#'
   )
   htmlContent = htmlContent.replace(
     /https:\/\/sso\.usps\.com[^"']*/g,
-    '/auth/login'
+    '#'
   )
   htmlContent = htmlContent.replace(
     /https:\/\/www\.usps\.com\/acct\/activation[^"']*/g,
-    '/auth/register'
+    '#'
   )
 
-  // Replace sign in/sign up/register/login text links
+  // Remove sign in/sign up/register/login text links (admin portal removed from public)
   htmlContent = htmlContent.replace(
     /href="[^"]*signin[^"]*"/gi,
-    'href="/auth/login"'
+    'href="#"'
   )
   htmlContent = htmlContent.replace(
     /href="[^"]*sign-in[^"]*"/gi,
-    'href="/auth/login"'
+    'href="#"'
   )
   htmlContent = htmlContent.replace(
     /href="[^"]*signup[^"]*"/gi,
-    'href="/auth/register"'
+    'href="#"'
   )
   htmlContent = htmlContent.replace(
     /href="[^"]*sign-up[^"]*"/gi,
-    'href="/auth/register"'
+    'href="#"'
   )
   htmlContent = htmlContent.replace(
     /href="[^"]*register[^"]*usps[^"]*"/gi,
-    'href="/auth/register"'
+    'href="#"'
   )
   htmlContent = htmlContent.replace(
     /href="[^"]*login[^"]*usps[^"]*"/gi,
-    'href="/auth/login"'
+    'href="#"'
   )
 
   // Update location finder links
