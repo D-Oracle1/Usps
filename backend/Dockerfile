@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
+# Install ALL dependencies (need devDeps for build)
 RUN npm ci
 
 # Generate Prisma client
@@ -18,23 +18,8 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine AS production
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-COPY prisma ./prisma/
-
-# Install production dependencies only
-RUN npm ci --only=production
-
-# Generate Prisma client in production
-RUN npx prisma generate
-
-# Copy built application
-COPY --from=builder /app/dist ./dist
+# Remove devDependencies after build
+RUN npm prune --production
 
 # Expose port
 EXPOSE 3000
