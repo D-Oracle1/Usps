@@ -7,7 +7,7 @@ COPY backend/package*.json ./
 COPY backend/prisma ./prisma/
 
 # Install ALL dependencies (need devDeps for build)
-RUN npm ci
+RUN npm install
 
 # Generate Prisma client
 RUN npx prisma generate
