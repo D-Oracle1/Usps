@@ -25,4 +25,4 @@ RUN npm prune --production
 EXPOSE 3000
 
 # Sync schema and start the application
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss || echo 'DB push failed'; node dist/main.js"]
