@@ -210,6 +210,19 @@ export default function PublicTrackingMapPage() {
       setPosition([lat, lng])
       if (data.speed) setSpeed(data.speed)
       if (data.progress) setProgress(data.progress.percentComplete)
+
+      // Update shipment with real-time ETA and distance from admin location changes
+      if (data.remainingDistance !== undefined || data.estimatedArrival || data.eta || data.distance) {
+        setShipment(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            remainingDistance: data.remainingDistance ?? data.distance?.remaining ?? prev.remainingDistance,
+            estimatedArrival: data.estimatedArrival ?? data.eta?.arrival ?? prev.estimatedArrival,
+            currentLocation: data.currentLocation ?? prev.currentLocation,
+          }
+        })
+      }
     })
 
     socket.current.on('shipmentIntercepted', (data) => {
