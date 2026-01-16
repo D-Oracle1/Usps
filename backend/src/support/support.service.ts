@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
@@ -6,22 +6,26 @@ import { SenderType, ConversationStatus } from '@prisma/client';
 
 @Injectable()
 export class SupportService {
+  private readonly logger = new Logger(SupportService.name);
+
   constructor(private prisma: PrismaService) {}
 
   // ============ Conversation Operations ============
 
   async createConversation(userId: string, dto: CreateConversationDto) {
+    this.logger.log(`Creating conversation for user ${userId}`);
+
     const conversation = await this.prisma.conversation.create({
       data: {
         supportUserId: userId,
-        trackingNumber: dto.trackingNumber,
-        subject: dto.subject,
+        trackingNumber: dto.trackingNumber || null,
+        subject: dto.subject || 'Support Request',
         lastMessageAt: new Date(),
         messages: {
           create: {
             senderId: userId,
             senderType: SenderType.USER,
-            content: dto.initialMessage,
+            content: dto.initialMessage || '',
           },
         },
       },
@@ -37,7 +41,9 @@ export class SupportService {
   }
 
   async getUserConversations(userId: string) {
-    return this.prisma.conversation.findMany({
+    this.logger.log(`Fetching conversations for user ${userId}`);
+
+    const conversations = await this.prisma.conversation.findMany({
       where: { supportUserId: userId },
       include: {
         messages: {
@@ -50,9 +56,13 @@ export class SupportService {
       },
       orderBy: { lastMessageAt: 'desc' },
     });
+
+    return conversations || [];
   }
 
   async getAllConversations(filters?: { status?: string; search?: string }) {
+    this.logger.log(`Fetching all conversations with filters: ${JSON.stringify(filters)}`);
+
     const where: any = {};
 
     if (filters?.status && filters.status !== 'all') {
@@ -67,7 +77,7 @@ export class SupportService {
       ];
     }
 
-    return this.prisma.conversation.findMany({
+    const conversations = await this.prisma.conversation.findMany({
       where,
       include: {
         supportUser: {
@@ -83,9 +93,13 @@ export class SupportService {
       },
       orderBy: { lastMessageAt: 'desc' },
     });
+
+    return conversations || [];
   }
 
   async getConversationById(conversationId: string) {
+    this.logger.log(`Fetching conversation ${conversationId}`);
+
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       include: {
@@ -99,31 +113,41 @@ export class SupportService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversation not found');
+      throw new NotFoundException(`Conversation ${conversationId} not found`);
     }
 
     return conversation;
   }
 
   async getConversationMessages(conversationId: string, page: number = 1, limit: number = 50) {
-    const messages = await this.prisma.message.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    // Ensure page and limit are valid numbers
+    const safePage = Math.max(1, Math.floor(page) || 1);
+    const safeLimit = Math.min(100, Math.max(1, Math.floor(limit) || 50));
+    const skip = (safePage - 1) * safeLimit;
 
-    const total = await this.prisma.message.count({
-      where: { conversationId },
-    });
+    this.logger.log(`Fetching messages for ${conversationId}: page=${safePage}, limit=${safeLimit}, skip=${skip}`);
+
+    const [messages, total] = await Promise.all([
+      this.prisma.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: 'asc' },
+        skip,
+        take: safeLimit,
+      }),
+      this.prisma.message.count({
+        where: { conversationId },
+      }),
+    ]);
+
+    const totalPages = safeLimit > 0 ? Math.ceil(total / safeLimit) : 0;
 
     return {
-      messages,
+      messages: messages || [],
       pagination: {
-        page,
-        limit,
+        page: safePage,
+        limit: safeLimit,
         total,
-        totalPages: Math.ceil(total / limit),
+        totalPages,
       },
     };
   }
@@ -131,8 +155,19 @@ export class SupportService {
   // ============ Message Operations ============
 
   async createMessage(dto: CreateMessageDto, senderId: string, senderType: SenderType) {
+    this.logger.log(`Creating message in conversation ${dto.conversationId} from ${senderType} ${senderId}`);
+
     const now = new Date();
     const messageType = dto.messageType || 'TEXT';
+
+    // Verify conversation exists first
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: dto.conversationId },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException(`Conversation ${dto.conversationId} not found`);
+    }
 
     // Use Prisma's create method for proper enum handling
     const message = await this.prisma.message.create({
@@ -140,7 +175,7 @@ export class SupportService {
         conversationId: dto.conversationId,
         senderId: senderId,
         senderType: senderType,
-        content: dto.content,
+        content: dto.content || '',
         messageType: messageType as any,
         isRead: false,
         createdAt: now,
@@ -153,13 +188,16 @@ export class SupportService {
       data: { lastMessageAt: now },
     });
 
+    this.logger.log(`Message created: ${message.id}`);
     return message;
   }
 
   async markMessagesAsRead(conversationId: string, userId: string, userType: string) {
+    this.logger.log(`Marking messages as read in ${conversationId} for ${userType} ${userId}`);
+
     const oppositeType = userType === 'support_user' ? SenderType.ADMIN : SenderType.USER;
 
-    await this.prisma.message.updateMany({
+    const result = await this.prisma.message.updateMany({
       where: {
         conversationId,
         senderType: oppositeType,
@@ -171,37 +209,49 @@ export class SupportService {
       },
     });
 
-    return { success: true };
+    this.logger.log(`Marked ${result.count} messages as read`);
+    return { success: true, count: result.count };
   }
 
   async getUnreadCount(conversationId: string, userType: string) {
     const senderType = userType === 'support_user' ? SenderType.ADMIN : SenderType.USER;
 
-    return this.prisma.message.count({
+    const count = await this.prisma.message.count({
       where: {
         conversationId,
         senderType,
         isRead: false,
       },
     });
+
+    return count;
   }
 
   // ============ Online Status ============
 
   async updateOnlineStatus(userId: string, isOnline: boolean) {
-    await this.prisma.supportUser.update({
-      where: { id: userId },
-      data: {
-        isOnline,
-        lastSeenAt: new Date(),
-      },
-    });
+    this.logger.log(`Updating online status for user ${userId}: ${isOnline}`);
+
+    try {
+      await this.prisma.supportUser.update({
+        where: { id: userId },
+        data: {
+          isOnline,
+          lastSeenAt: new Date(),
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to update online status for ${userId}: ${error.message}`);
+      // Don't throw - this is not critical
+    }
   }
 
   // ============ Admin Operations ============
 
   async assignConversation(conversationId: string, adminId: string) {
-    return this.prisma.conversation.update({
+    this.logger.log(`Assigning conversation ${conversationId} to admin ${adminId}`);
+
+    const conversation = await this.prisma.conversation.update({
       where: { id: conversationId },
       data: { assignedAdminId: adminId },
       include: {
@@ -213,18 +263,26 @@ export class SupportService {
         },
       },
     });
+
+    return conversation;
   }
 
   async updateConversationStatus(conversationId: string, status: ConversationStatus) {
-    return this.prisma.conversation.update({
+    this.logger.log(`Updating conversation ${conversationId} status to ${status}`);
+
+    const conversation = await this.prisma.conversation.update({
       where: { id: conversationId },
       data: { status },
     });
+
+    return conversation;
   }
 
   // ============ Statistics ============
 
   async getChatStatistics() {
+    this.logger.log('Fetching chat statistics');
+
     const [total, open, pending, resolved, closed] = await Promise.all([
       this.prisma.conversation.count(),
       this.prisma.conversation.count({ where: { status: ConversationStatus.OPEN } }),
