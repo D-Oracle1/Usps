@@ -2,9 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY prisma ./prisma/
+# Copy backend package files
+COPY backend/package*.json ./
+COPY backend/prisma ./prisma/
 
 # Install ALL dependencies (need devDeps for build)
 RUN npm ci
@@ -12,8 +12,8 @@ RUN npm ci
 # Generate Prisma client
 RUN npx prisma generate
 
-# Copy source code
-COPY . .
+# Copy backend source code
+COPY backend/ .
 
 # Build the application
 RUN npm run build
