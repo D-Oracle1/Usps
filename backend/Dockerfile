@@ -24,5 +24,5 @@ RUN npm prune --production
 # Expose port
 EXPOSE 3000
 
-# Push schema (with 30s timeout) then start the application
-CMD ["sh", "-c", "timeout 30 npx prisma db push --accept-data-loss || true; node dist/main.js"]
+# Sync schema and start the application
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main.js"]
