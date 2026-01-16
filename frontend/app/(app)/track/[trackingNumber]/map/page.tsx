@@ -116,8 +116,11 @@ export default function PublicTrackingMapPage() {
         const response = await api.get(`/tracking/public/${trackingNumber}`)
         const { shipment: shipmentData, events: eventsData } = response.data
 
+        console.log('Tracking API response:', { shipmentData, eventsData })
+        console.log('Events count:', eventsData?.length || 0)
+
         setShipment(shipmentData)
-        setEvents(eventsData)
+        setEvents(eventsData || [])
         setIsMoving(shipmentData.movementState?.isMoving ?? false)
 
         // Try to get route info

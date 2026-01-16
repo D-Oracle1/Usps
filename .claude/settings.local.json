@@ -56,7 +56,14 @@
       "Bash(pkill:*)",
       "Bash(set -a)",
       "Bash(source .env)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres.kcnudftcmxtxmwslcbxm:93rMrdfxgFNbMCW@aws-1-eu-west-3.pooler.supabase.com:6543/postgres?pgbouncer=true\" npx prisma db push:*)",
+      "Bash(npx nest:*)",
+      "Bash(npm:*)",
+      "Bash(node --version:*)",
+      "Bash(cmd //c \"start /B npm run start:dev\")",
+      "Bash(cmd //c \"start /B npm run dev\")",
+      "Bash(node:*)"
     ]
   }
 }
