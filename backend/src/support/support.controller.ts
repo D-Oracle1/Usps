@@ -10,6 +10,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { SupportService } from './support.service';
+import { SupportGateway } from './support.gateway';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { SupportJwtAuthGuard } from './guards/support-jwt.guard';
@@ -18,7 +19,10 @@ import { SenderType, ConversationStatus } from '@prisma/client';
 
 @Controller('support')
 export class SupportController {
-  constructor(private supportService: SupportService) {}
+  constructor(
+    private supportService: SupportService,
+    private supportGateway: SupportGateway,
+  ) {}
 
   // ============ User Endpoints (Support User Auth) ============
 
@@ -56,16 +60,28 @@ export class SupportController {
 
   @Post('conversations/:id/messages')
   @UseGuards(SupportJwtAuthGuard)
-  sendMessage(
+  async sendMessage(
     @Request() req,
     @Param('id') conversationId: string,
     @Body() body: { content: string },
   ) {
-    return this.supportService.createMessage(
+    const message = await this.supportService.createMessage(
       { conversationId, content: body.content },
       req.user.userId,
       SenderType.USER,
     );
+
+    // Emit via WebSocket for real-time updates
+    this.supportGateway.server.to(`conversation:${conversationId}`).emit('newMessage', {
+      ...message,
+      conversationId,
+    });
+    this.supportGateway.server.to('admin-room').emit('conversationUpdated', {
+      conversationId,
+      lastMessage: message,
+    });
+
+    return message;
   }
 
   @Post('conversations/:id/read')
@@ -107,16 +123,28 @@ export class SupportController {
 
   @Post('admin/conversations/:id/messages')
   @UseGuards(JwtAuthGuard)
-  sendAdminMessage(
+  async sendAdminMessage(
     @Request() req,
     @Param('id') conversationId: string,
     @Body() body: { content: string },
   ) {
-    return this.supportService.createMessage(
+    const message = await this.supportService.createMessage(
       { conversationId, content: body.content },
       req.user.userId,
       SenderType.ADMIN,
     );
+
+    // Emit via WebSocket for real-time updates to user
+    this.supportGateway.server.to(`conversation:${conversationId}`).emit('newMessage', {
+      ...message,
+      conversationId,
+    });
+    this.supportGateway.server.to('admin-room').emit('conversationUpdated', {
+      conversationId,
+      lastMessage: message,
+    });
+
+    return message;
   }
 
   @Post('admin/conversations/:id/read')

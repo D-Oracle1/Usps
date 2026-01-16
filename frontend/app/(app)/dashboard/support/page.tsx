@@ -11,7 +11,8 @@ import {
   User,
   MessageSquare,
   Clock,
-  Filter
+  Filter,
+  RefreshCw
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { getSupportSocket, disconnectSupportSocket } from '@/lib/support-socket'
@@ -36,7 +37,7 @@ function formatTime(dateString: string): string {
 }
 
 export default function AdminSupportPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -46,8 +47,16 @@ export default function AdminSupportPage() {
   const [isTyping, setIsTyping] = useState(false)
   const [statistics, setStatistics] = useState<ChatStatistics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isConnected, setIsConnected] = useState(false)
+  const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>(null)
+  const activeConversationRef = useRef<string | null>(null)
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    activeConversationRef.current = activeConversation?.id || null
+  }, [activeConversation])
 
   // Load initial data
   useEffect(() => {
@@ -55,34 +64,78 @@ export default function AdminSupportPage() {
     loadStatistics()
   }, [])
 
-  // Setup WebSocket
+  // Setup WebSocket - separate effect to avoid stale closures
   useEffect(() => {
     if (!token) return
 
     const socket = getSupportSocket(token)
 
-    socket.on('newMessage', (message: Message) => {
+    const handleConnect = () => {
+      setIsConnected(true)
+      // Rejoin conversation room if we have one
+      if (activeConversationRef.current) {
+        socket.emit('joinConversation', { conversationId: activeConversationRef.current })
+      }
+    }
+
+    const handleDisconnect = () => {
+      setIsConnected(false)
+    }
+
+    const handleNewMessage = (message: Message) => {
       // Update messages if in active conversation
-      if (activeConversation && message.conversationId === activeConversation.id) {
-        setMessages(prev => [...prev, message])
+      if (activeConversationRef.current && message.conversationId === activeConversationRef.current) {
+        setMessages(prev => {
+          // Prevent duplicates
+          if (prev.some(m => m.id === message.id)) {
+            return prev
+          }
+          return [...prev, message]
+        })
       }
       // Refresh conversation list
       loadConversations()
       loadStatistics()
-    })
+    }
 
-    socket.on('userTyping', (data: { conversationId: string; isTyping: boolean; userType: string }) => {
-      if (activeConversation && data.conversationId === activeConversation.id && data.userType !== 'admin') {
+    const handleUserTyping = (data: { conversationId: string; isTyping: boolean; userType: string }) => {
+      if (activeConversationRef.current === data.conversationId && data.userType !== 'admin') {
         setIsTyping(data.isTyping)
       }
-    })
+    }
 
+    const handleMessagesRead = (data: { conversationId: string; readByType: string }) => {
+      if (activeConversationRef.current === data.conversationId && data.readByType === 'support_user') {
+        setMessages(prev => prev.map(m =>
+          m.senderType === 'ADMIN' ? { ...m, isRead: true } : m
+        ))
+      }
+    }
+
+    socket.on('connect', handleConnect)
+    socket.on('disconnect', handleDisconnect)
+    socket.on('newMessage', handleNewMessage)
+    socket.on('userTyping', handleUserTyping)
+    socket.on('messagesRead', handleMessagesRead)
     socket.on('userOnline', () => loadConversations())
     socket.on('userOffline', () => loadConversations())
     socket.on('conversationUpdated', () => loadConversations())
 
-    return () => disconnectSupportSocket()
-  }, [token, activeConversation])
+    if (socket.connected) {
+      setIsConnected(true)
+    }
+
+    return () => {
+      socket.off('connect', handleConnect)
+      socket.off('disconnect', handleDisconnect)
+      socket.off('newMessage', handleNewMessage)
+      socket.off('userTyping', handleUserTyping)
+      socket.off('messagesRead', handleMessagesRead)
+      socket.off('userOnline')
+      socket.off('userOffline')
+      socket.off('conversationUpdated')
+    }
+  }, [token])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -128,18 +181,55 @@ export default function AdminSupportPage() {
     }
   }
 
-  const handleSend = useCallback(() => {
-    if (!newMessage.trim() || !activeConversation || !token) return
+  const handleSend = useCallback(async () => {
+    if (!newMessage.trim() || !activeConversation || !token || isSending) return
 
-    const socket = getSupportSocket(token)
-    socket.emit('sendMessage', {
-      conversationId: activeConversation.id,
-      content: newMessage.trim(),
-    })
-
+    const messageContent = newMessage.trim()
     setNewMessage('')
-    socket.emit('typing', { conversationId: activeConversation.id, isTyping: false })
-  }, [newMessage, activeConversation, token])
+    setIsSending(true)
+
+    // Create optimistic message
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      conversationId: activeConversation.id,
+      senderId: user?.id || '',
+      senderType: 'ADMIN',
+      content: messageContent,
+      messageType: 'TEXT',
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    }
+
+    // Add optimistic message to UI immediately
+    setMessages(prev => [...prev, optimisticMessage])
+
+    try {
+      // Send via REST API for reliability
+      const response = await api.post(`/support/admin/conversations/${activeConversation.id}/messages`, {
+        content: messageContent,
+      })
+
+      // Replace optimistic message with real one
+      setMessages(prev => prev.map(m =>
+        m.id === optimisticMessage.id ? response.data : m
+      ))
+
+      // Also emit via WebSocket for real-time sync to user
+      const socket = getSupportSocket(token)
+      socket.emit('typing', { conversationId: activeConversation.id, isTyping: false })
+
+      // Refresh conversation list
+      loadConversations()
+    } catch (error) {
+      console.error('Failed to send message:', error)
+      // Remove optimistic message on failure
+      setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id))
+      // Restore the message to input
+      setNewMessage(messageContent)
+    } finally {
+      setIsSending(false)
+    }
+  }, [newMessage, activeConversation, token, user, isSending])
 
   const handleTyping = useCallback(() => {
     if (!activeConversation || !token) return
@@ -196,6 +286,26 @@ export default function AdminSupportPage() {
     <div className="h-[calc(100vh-200px)] min-h-[500px] flex bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
       {/* Left Sidebar - Conversation List */}
       <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+        {/* Header with connection status */}
+        <div className="p-3 border-b border-gray-200 bg-white flex items-center justify-between">
+          <div className="flex items-center">
+            <div className={`w-2.5 h-2.5 rounded-full mr-2 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-sm font-medium text-gray-700">
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              loadConversations()
+              loadStatistics()
+            }}
+            className="p-1.5 text-gray-500 hover:text-[#333366] hover:bg-gray-100 rounded transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+
         {/* Statistics */}
         {statistics && (
           <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-[#333366] to-[#1a1a4e]">
@@ -429,10 +539,14 @@ export default function AdminSupportPage() {
                 />
                 <button
                   onClick={handleSend}
-                  disabled={!newMessage.trim()}
+                  disabled={!newMessage.trim() || isSending}
                   className="p-3 bg-[#333366] text-white rounded-full hover:bg-[#1a1a4e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  <Send className="w-5 h-5" />
+                  {isSending ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
