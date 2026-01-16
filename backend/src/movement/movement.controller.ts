@@ -36,6 +36,18 @@ class ChangeAddressDto {
   newDestination: string;
 }
 
+class UpdateLocationDto {
+  @IsNumber()
+  latitude: number;
+
+  @IsNumber()
+  longitude: number;
+
+  @IsString()
+  @IsOptional()
+  addressLabel?: string;
+}
+
 @Controller('movement')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MovementController {
@@ -136,6 +148,22 @@ export class MovementController {
       shipmentId,
       dto.newDestination,
       req.user.userId,
+    );
+  }
+
+  @Post(':shipmentId/update-location')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  updateLocationManually(
+    @Param('shipmentId') shipmentId: string,
+    @Body() dto: UpdateLocationDto,
+    @Request() req,
+  ) {
+    return this.movementService.updateLocationManually(
+      shipmentId,
+      req.user.userId,
+      dto.latitude,
+      dto.longitude,
+      dto.addressLabel,
     );
   }
 }

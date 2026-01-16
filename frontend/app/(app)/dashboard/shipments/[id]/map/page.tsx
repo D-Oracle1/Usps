@@ -69,13 +69,6 @@ export default function ShipmentMapPage() {
       <div className="h-[calc(100vh-12rem)] bg-white rounded-lg shadow">
         <ShipmentMap shipment={shipment} onMovementStateChange={loadShipment} />
       </div>
-
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-sm text-blue-800">
-          <strong>Pro Tip:</strong> Use the pause button to temporarily stop location updates.
-          The marker will freeze on the map until you resume. This is useful for simulating stops or delays.
-        </p>
-      </div>
     </div>
   )
 }

@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { io, Socket } from 'socket.io-client'
 import api from '@/lib/api'
 import type { Shipment, TrackingEvent } from '@/lib/types'
-import { ArrowLeft, MapPin, Truck, Clock, Navigation, Package, CheckCircle, AlertCircle } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, Clock, Navigation, Package, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, User, Phone, Mail, FileText, Scale, DollarSign, Ruler, Calendar } from 'lucide-react'
+import { formatDate } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 
 // Dynamically import Leaflet components
@@ -53,6 +54,12 @@ export default function PublicTrackingMapPage() {
   const [speed, setSpeed] = useState(0)
   const [progress, setProgress] = useState(0)
   const [mapReady, setMapReady] = useState(false)
+
+  // Interception state
+  const [isIntercepted, setIsIntercepted] = useState(false)
+  const [interceptReason, setInterceptReason] = useState<string | null>(null)
+  const [interceptedAt, setInterceptedAt] = useState<string | null>(null)
+  const [clearReason, setClearReason] = useState<string | null>(null)
 
   // Smooth position interpolation with improved stability
   const animateToPosition = useCallback((targetLat: number, targetLng: number) => {
@@ -181,6 +188,10 @@ export default function PublicTrackingMapPage() {
 
     socket.current.on('joinedShipment', (data) => {
       setIsMoving(data.isMoving)
+      setIsIntercepted(data.isIntercepted || false)
+      setInterceptReason(data.interceptReason || null)
+      setInterceptedAt(data.interceptedAt || null)
+      setClearReason(data.clearReason || null)
       if (data.currentLocation) {
         const lat = data.currentLocation.latitude
         const lng = data.currentLocation.longitude
@@ -198,10 +209,25 @@ export default function PublicTrackingMapPage() {
       if (data.progress) setProgress(data.progress.percentComplete)
     })
 
+    socket.current.on('shipmentIntercepted', (data) => {
+      setIsMoving(false)
+      setIsIntercepted(true)
+      setInterceptReason(data.reason || 'Shipment intercepted')
+      setInterceptedAt(data.timestamp || new Date().toISOString())
+    })
+
+    socket.current.on('shipmentCleared', (data) => {
+      setIsMoving(true)
+      setIsIntercepted(false)
+      setClearReason(data.reason || 'Shipment cleared')
+      setInterceptReason(null)
+    })
+
     socket.current.on('shipmentPaused', () => setIsMoving(false))
     socket.current.on('shipmentResumed', () => setIsMoving(true))
     socket.current.on('shipmentDelivered', () => {
       setIsMoving(false)
+      setIsIntercepted(false)
       setShipment(prev => prev ? { ...prev, currentStatus: 'DELIVERED' } : null)
     })
 
@@ -389,25 +415,27 @@ export default function PublicTrackingMapPage() {
         )}
 
         {/* Status Overlay */}
-        <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 z-[1000] min-w-[180px]">
+        <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 z-[1000] min-w-[200px]">
           <div className="flex items-center gap-2 mb-2">
             <div className={`w-3 h-3 rounded-full ${
               shipment.currentStatus === 'DELIVERED' ? 'bg-green-500' :
+              isIntercepted ? 'bg-red-500 animate-pulse' :
               isMoving ? 'bg-green-500 animate-pulse' : 'bg-blue-500'
             }`} />
-            <span className="font-medium text-gray-900">
+            <span className={`font-medium ${isIntercepted ? 'text-red-700' : 'text-gray-900'}`}>
               {shipment.currentStatus === 'DELIVERED' ? 'Delivered' :
                shipment.currentStatus === 'PENDING' ? 'Pending Pickup' :
+               isIntercepted ? 'INTERCEPTED' :
                isMoving ? 'In Transit' : 'Processing'}
             </span>
           </div>
-          {isMoving && speed > 0 && (
+          {isMoving && speed > 0 && !isIntercepted && (
             <div className="flex items-center text-sm text-gray-600">
               <Navigation className="w-4 h-4 mr-1" />
               {Math.round(speed)} km/h
             </div>
           )}
-          {progress > 0 && (
+          {progress > 0 && !isIntercepted && (
             <div className="mt-2">
               <div className="text-xs text-gray-500 mb-1">Progress</div>
               <div className="w-full bg-gray-200 rounded-full h-2">
@@ -416,47 +444,354 @@ export default function PublicTrackingMapPage() {
             </div>
           )}
         </div>
+
+        {/* Interception Alert Banner */}
+        {isIntercepted && (
+          <div className="absolute top-4 left-4 right-[240px] bg-red-600 text-white rounded-lg shadow-lg p-4 z-[1000]">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-bold text-lg">Shipment Intercepted</h3>
+                <p className="text-red-100 text-sm mt-1">
+                  Your shipment has been temporarily held for inspection or verification.
+                </p>
+                {interceptReason && (
+                  <div className="mt-2 p-2 bg-red-700/50 rounded">
+                    <p className="text-xs text-red-200 font-medium">Reason:</p>
+                    <p className="text-sm">{interceptReason}</p>
+                  </div>
+                )}
+                <p className="text-xs text-red-200 mt-2">
+                  Movement will resume once the goods are cleared.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Clear Notification (shows briefly when goods are cleared) */}
+        {clearReason && !isIntercepted && isMoving && (
+          <div className="absolute top-4 left-4 right-[240px] bg-emerald-600 text-white rounded-lg shadow-lg p-3 z-[1000]">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Shipment Cleared - Movement Resumed</p>
+                <p className="text-emerald-100 text-xs">{clearReason}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Info Panel */}
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <div className="text-sm text-gray-500 flex items-center gap-1 mb-1">
-                <div className="w-2 h-2 rounded-full bg-green-500" /> Origin
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Shipment Details */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Route Card */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                <Truck className="w-5 h-5 mr-2 text-[#333366]" />
+                Shipment Route
+              </h3>
+              <div className="flex items-stretch">
+                {/* Origin */}
+                <div className="flex-1 p-4 bg-green-50 rounded-lg border border-green-100">
+                  <div className="flex items-center mb-2">
+                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-2">
+                      <MapPin className="w-3 h-3 text-white" />
+                    </div>
+                    <span className="text-xs font-semibold text-green-600">ORIGIN</span>
+                  </div>
+                  <p className="font-medium text-gray-900">{shipment.originLocation}</p>
+                </div>
+
+                {/* Arrow */}
+                <div className="flex items-center px-4">
+                  <div className="w-8 h-0.5 bg-[#333366]"></div>
+                  <div className="w-0 h-0 border-t-4 border-b-4 border-l-8 border-transparent border-l-[#333366]"></div>
+                </div>
+
+                {/* Destination */}
+                <div className="flex-1 p-4 bg-red-50 rounded-lg border border-red-100">
+                  <div className="flex items-center mb-2">
+                    <div className="w-6 h-6 bg-[#cc0000] rounded-full flex items-center justify-center mr-2">
+                      <MapPin className="w-3 h-3 text-white" />
+                    </div>
+                    <span className="text-xs font-semibold text-red-600">DESTINATION</span>
+                  </div>
+                  <p className="font-medium text-gray-900">{shipment.destinationLocation}</p>
+                </div>
               </div>
-              <div className="font-medium text-gray-900">{shipment.originLocation}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-500 mb-1">Tracking Number</div>
-              <div className="font-mono font-bold text-[#333366]">{shipment.trackingNumber}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-500 flex items-center justify-end gap-1 mb-1">
-                <div className="w-2 h-2 rounded-full bg-red-500" /> Destination
+
+              {/* Tracking Number */}
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg text-center">
+                <div className="text-xs text-gray-500 mb-1">Tracking Number</div>
+                <div className="font-mono font-bold text-lg text-[#333366]">{shipment.trackingNumber}</div>
               </div>
-              <div className="font-medium text-gray-900">{shipment.destinationLocation}</div>
+            </div>
+
+            {/* Package Details */}
+            {(shipment.goodsDescription || shipment.packageWeight || shipment.declaredValue) && (
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                  <Package className="w-5 h-5 mr-2 text-[#333366]" />
+                  Package Details
+                </h3>
+
+                {shipment.goodsDescription && (
+                  <div className="flex items-start p-3 bg-gray-50 rounded-lg mb-3">
+                    <FileText className="w-5 h-5 text-gray-500 mr-3 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-gray-500 font-medium">CONTENTS</p>
+                      <p className="text-gray-900">{shipment.goodsDescription}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {shipment.packageWeight && (
+                    <div className="flex items-center p-3 bg-gray-50 rounded-lg">
+                      <Scale className="w-4 h-4 text-gray-500 mr-2" />
+                      <div>
+                        <p className="text-xs text-gray-500">Weight</p>
+                        <p className="font-medium text-gray-900">{shipment.packageWeight} lbs</p>
+                      </div>
+                    </div>
+                  )}
+                  {shipment.packageDimensions && (
+                    <div className="flex items-center p-3 bg-gray-50 rounded-lg">
+                      <Ruler className="w-4 h-4 text-gray-500 mr-2" />
+                      <div>
+                        <p className="text-xs text-gray-500">Dimensions</p>
+                        <p className="font-medium text-gray-900">{shipment.packageDimensions}</p>
+                      </div>
+                    </div>
+                  )}
+                  {shipment.declaredValue && (
+                    <div className="flex items-center p-3 bg-gray-50 rounded-lg">
+                      <DollarSign className="w-4 h-4 text-gray-500 mr-2" />
+                      <div>
+                        <p className="text-xs text-gray-500">Declared Value</p>
+                        <p className="font-medium text-gray-900">${shipment.declaredValue.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  )}
+                  {shipment.serviceType && (
+                    <div className="flex items-center p-3 bg-gray-50 rounded-lg">
+                      <Truck className="w-4 h-4 text-gray-500 mr-2" />
+                      <div>
+                        <p className="text-xs text-gray-500">Service</p>
+                        <p className="font-medium text-gray-900">{shipment.serviceType.replace(/_/g, ' ')}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Shipment History */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                <Clock className="w-5 h-5 mr-2 text-[#333366]" />
+                Shipment History
+              </h3>
+              {events.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No tracking events yet
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {events.map((event, index) => (
+                    <div key={event.id} className="flex">
+                      <div className="flex flex-col items-center mr-4">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          index === 0 ? 'bg-[#333366]' :
+                          event.status === 'INTERCEPTED' ? 'bg-red-500' :
+                          event.status === 'CLEARED' ? 'bg-emerald-500' :
+                          event.status === 'DELIVERED' ? 'bg-green-500' :
+                          'bg-gray-300'
+                        }`}>
+                          {event.status === 'INTERCEPTED' ? (
+                            <AlertTriangle className="w-4 h-4 text-white" />
+                          ) : event.status === 'CLEARED' ? (
+                            <ShieldCheck className="w-4 h-4 text-white" />
+                          ) : event.status === 'DELIVERED' ? (
+                            <CheckCircle className="w-4 h-4 text-white" />
+                          ) : (
+                            <Package className="w-4 h-4 text-white" />
+                          )}
+                        </div>
+                        {index < events.length - 1 && (
+                          <div className="w-0.5 h-full bg-gray-200 min-h-[40px]" />
+                        )}
+                      </div>
+                      <div className="flex-1 pb-6">
+                        <div className={`p-3 rounded-lg ${
+                          event.status === 'INTERCEPTED' ? 'bg-red-50 border border-red-100' :
+                          event.status === 'CLEARED' ? 'bg-emerald-50 border border-emerald-100' :
+                          event.status === 'DELIVERED' ? 'bg-green-50 border border-green-100' :
+                          'bg-gray-50'
+                        }`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-sm font-semibold ${
+                              event.status === 'INTERCEPTED' ? 'text-red-700' :
+                              event.status === 'CLEARED' ? 'text-emerald-700' :
+                              event.status === 'DELIVERED' ? 'text-green-700' :
+                              'text-gray-900'
+                            }`}>
+                              {event.status.replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-xs text-gray-500">{formatDate(event.eventTime)}</span>
+                          </div>
+                          <p className="text-sm text-gray-600">{event.description}</p>
+                          <div className="flex items-center text-xs text-gray-500 mt-1">
+                            <MapPin className="w-3 h-3 mr-1" />
+                            {event.location}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Recent Events */}
-          {events.length > 0 && (
-            <div className="mt-6 pt-6 border-t">
-              <h3 className="font-semibold text-gray-900 mb-4">Recent Updates</h3>
-              <div className="space-y-3">
-                {events.slice(0, 3).map((event) => (
-                  <div key={event.id} className="flex items-start gap-3">
-                    <Clock className="w-4 h-4 text-gray-400 mt-0.5" />
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{event.status.replace('_', ' ')}</div>
-                      <div className="text-xs text-gray-500">{event.description}</div>
+          {/* Right Column - Sender/Recipient Info */}
+          <div className="space-y-6">
+            {/* Sender Info */}
+            {(shipment.senderName || shipment.senderPhone || shipment.senderEmail) && (
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div className="bg-green-600 px-4 py-3">
+                  <h3 className="font-semibold text-white flex items-center">
+                    <User className="w-4 h-4 mr-2" />
+                    Sender
+                  </h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  {shipment.senderName && (
+                    <div className="flex items-center text-sm">
+                      <User className="w-4 h-4 text-gray-400 mr-3" />
+                      <span className="text-gray-900">{shipment.senderName}</span>
                     </div>
+                  )}
+                  {shipment.senderPhone && (
+                    <div className="flex items-center text-sm">
+                      <Phone className="w-4 h-4 text-gray-400 mr-3" />
+                      <span className="text-gray-900">{shipment.senderPhone}</span>
+                    </div>
+                  )}
+                  {shipment.senderEmail && (
+                    <div className="flex items-center text-sm">
+                      <Mail className="w-4 h-4 text-gray-400 mr-3" />
+                      <span className="text-gray-900">{shipment.senderEmail}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Recipient Info */}
+            {(shipment.recipientName || shipment.recipientPhone || shipment.recipientEmail) && (
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div className="bg-[#cc0000] px-4 py-3">
+                  <h3 className="font-semibold text-white flex items-center">
+                    <User className="w-4 h-4 mr-2" />
+                    Recipient
+                  </h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  {shipment.recipientName && (
+                    <div className="flex items-center text-sm">
+                      <User className="w-4 h-4 text-gray-400 mr-3" />
+                      <span className="text-gray-900">{shipment.recipientName}</span>
+                    </div>
+                  )}
+                  {shipment.recipientPhone && (
+                    <div className="flex items-center text-sm">
+                      <Phone className="w-4 h-4 text-gray-400 mr-3" />
+                      <span className="text-gray-900">{shipment.recipientPhone}</span>
+                    </div>
+                  )}
+                  {shipment.recipientEmail && (
+                    <div className="flex items-center text-sm">
+                      <Mail className="w-4 h-4 text-gray-400 mr-3" />
+                      <span className="text-gray-900">{shipment.recipientEmail}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Status & Dates */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
+                <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                Status & Dates
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-sm text-gray-500">Status</span>
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    shipment.currentStatus === 'DELIVERED' ? 'bg-green-100 text-green-700' :
+                    shipment.currentStatus === 'IN_TRANSIT' ? 'bg-blue-100 text-blue-700' :
+                    shipment.currentStatus === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {shipment.currentStatus.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-sm text-gray-500">Created</span>
+                  <span className="text-sm font-medium text-gray-900">{formatDate(shipment.createdAt)}</span>
+                </div>
+                {shipment.estimatedArrival && (
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-gray-500">Est. Arrival</span>
+                    <span className="text-sm font-medium text-gray-900">{formatDate(shipment.estimatedArrival)}</span>
                   </div>
-                ))}
+                )}
               </div>
             </div>
-          )}
+
+            {/* Distance Info */}
+            {(shipment.totalDistance || shipment.remainingDistance) && (
+              <div className="bg-white rounded-lg shadow-lg p-4">
+                <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
+                  <Navigation className="w-4 h-4 mr-2 text-gray-500" />
+                  Distance
+                </h3>
+                <div className="space-y-2">
+                  {shipment.totalDistance && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Total Distance</span>
+                      <span className="text-sm font-medium">{Math.round(shipment.totalDistance)} km</span>
+                    </div>
+                  )}
+                  {shipment.remainingDistance && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Remaining</span>
+                      <span className="text-sm font-medium">{Math.round(shipment.remainingDistance)} km</span>
+                    </div>
+                  )}
+                  {shipment.totalDistance && shipment.remainingDistance && (
+                    <div className="mt-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-[#333366] h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(0, Math.min(100, ((shipment.totalDistance - shipment.remainingDistance) / shipment.totalDistance) * 100))}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 text-center mt-1">
+                        {Math.round(((shipment.totalDistance - shipment.remainingDistance) / shipment.totalDistance) * 100)}% Complete
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

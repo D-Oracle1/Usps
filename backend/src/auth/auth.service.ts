@@ -52,21 +52,35 @@ export class AuthService {
   }
 
   async register(createAdminDto: CreateAdminDto) {
-    const hashedPassword = await bcrypt.hash(createAdminDto.password, 10);
-
-    // Always create USER accounts via public registration
-    // ADMIN accounts must be created by existing SUPER_ADMIN
-    const user = await this.prisma.adminUser.create({
-      data: {
-        name: createAdminDto.name,
-        email: createAdminDto.email,
-        passwordHash: hashedPassword,
-        role: UserRole.USER,
-      },
+    // Check if email already exists
+    const existingUser = await this.prisma.adminUser.findUnique({
+      where: { email: createAdminDto.email },
     });
 
-    const { passwordHash, ...result } = user;
-    return result;
+    if (existingUser) {
+      throw new UnauthorizedException('Email already registered');
+    }
+
+    const hashedPassword = await bcrypt.hash(createAdminDto.password, 10);
+
+    try {
+      // Always create USER accounts via public registration
+      // ADMIN accounts must be created by existing SUPER_ADMIN
+      const user = await this.prisma.adminUser.create({
+        data: {
+          name: createAdminDto.name,
+          email: createAdminDto.email,
+          passwordHash: hashedPassword,
+          role: UserRole.USER,
+        },
+      });
+
+      const { passwordHash, ...result } = user;
+      return result;
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw new UnauthorizedException('Registration failed. Please try again.');
+    }
   }
 
   async getProfile(userId: string) {

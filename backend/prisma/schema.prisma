@@ -179,15 +179,17 @@ model ShipmentLocation {
   @@map("shipment_locations")
 }
 
-// Shipment Movement State - Admin control for pause/resume
+// Shipment Movement State - Admin control for pause/resume/intercept
 model ShipmentMovementState {
-  id         String    @id @default(uuid())
-  shipmentId String    @unique @map("shipment_id")
-  isMoving   Boolean   @default(true) @map("is_moving")
-  pausedBy   String?   @map("paused_by")
-  pausedAt   DateTime? @map("paused_at")
-  resumedAt  DateTime? @map("resumed_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  id              String    @id @default(uuid())
+  shipmentId      String    @unique @map("shipment_id")
+  isMoving        Boolean   @default(true) @map("is_moving")
+  pausedBy        String?   @map("paused_by")
+  pausedAt        DateTime? @map("paused_at")
+  resumedAt       DateTime? @map("resumed_at")
+  interceptReason String?   @map("intercept_reason")
+  clearReason     String?   @map("clear_reason")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   // Relations
   shipment   Shipment   @relation(fields: [shipmentId], references: [id], onDelete: Cascade)

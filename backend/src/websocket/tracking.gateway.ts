@@ -104,7 +104,17 @@ export class TrackingGateway
       const shipment = await this.prisma.shipment.findUnique({
         where: { id: shipmentId },
         include: {
-          movementState: true,
+          movementState: {
+            include: {
+              pausedByAdmin: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
         },
       });
 
@@ -127,6 +137,11 @@ export class TrackingGateway
       client.emit('joinedShipment', {
         shipmentId,
         isMoving: shipment.movementState?.isMoving ?? false,
+        isIntercepted: shipment.movementState ? !shipment.movementState.isMoving : false,
+        interceptReason: shipment.movementState?.interceptReason || null,
+        interceptedAt: shipment.movementState?.pausedAt || null,
+        interceptedBy: shipment.movementState?.pausedByAdmin || null,
+        clearReason: shipment.movementState?.clearReason || null,
         currentLocation: latestLocation || null,
         shipment,
         hasActiveSimulation: !!simulation,
@@ -215,12 +230,13 @@ export class TrackingGateway
     });
   }
 
-  emitPauseEvent(shipmentId: string, reason?: string) {
+  emitPauseEvent(shipmentId: string, reason?: string, admin?: { id: string; name: string; email: string } | null) {
     const room = `shipment:${shipmentId}`;
     this.server.to(room).emit('shipmentIntercepted', {
       shipmentId,
       status: 'INTERCEPTED',
       reason: reason || 'Shipment intercepted',
+      interceptedBy: admin ? { name: admin.name, email: admin.email } : null,
       timestamp: new Date(),
     });
 
@@ -234,12 +250,13 @@ export class TrackingGateway
     this.logger.log(`Emitted intercept event for shipment: ${shipmentId}, reason: ${reason}`);
   }
 
-  emitResumeEvent(shipmentId: string, reason?: string) {
+  emitResumeEvent(shipmentId: string, reason?: string, admin?: { id: string; name: string; email: string } | null) {
     const room = `shipment:${shipmentId}`;
     this.server.to(room).emit('shipmentCleared', {
       shipmentId,
       status: 'CLEARED',
       reason: reason || 'Shipment cleared',
+      clearedBy: admin ? { name: admin.name, email: admin.email } : null,
       timestamp: new Date(),
     });
 

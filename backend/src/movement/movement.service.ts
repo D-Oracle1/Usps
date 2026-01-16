@@ -367,6 +367,8 @@ export class MovementService {
         isMoving: false,
         pausedBy: adminId,
         pausedAt: new Date(),
+        interceptReason: reason,
+        clearReason: null, // Reset clear reason when intercepted
       },
       include: {
         pausedByAdmin: {
@@ -390,7 +392,7 @@ export class MovementService {
       },
     });
 
-    this.trackingGateway.emitPauseEvent(shipmentId, reason);
+    this.trackingGateway.emitPauseEvent(shipmentId, reason, movementState.pausedByAdmin);
 
     return {
       message: 'Shipment intercepted successfully',
@@ -424,7 +426,14 @@ export class MovementService {
       data: {
         isMoving: true,
         resumedAt: new Date(),
+        clearReason: reason,
       },
+    });
+
+    // Get admin info for the event
+    const admin = await this.prisma.adminUser.findUnique({
+      where: { id: adminId },
+      select: { id: true, name: true, email: true },
     });
 
     await this.prisma.trackingEvent.create({
@@ -438,7 +447,7 @@ export class MovementService {
       },
     });
 
-    this.trackingGateway.emitResumeEvent(shipmentId, reason);
+    this.trackingGateway.emitResumeEvent(shipmentId, reason, admin);
 
     return {
       message: 'Shipment cleared successfully',

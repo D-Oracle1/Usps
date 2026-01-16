@@ -24,7 +24,11 @@ import {
   Ruler,
   Map,
   Play,
-  Pause
+  Pause,
+  AlertTriangle,
+  X,
+  ShieldCheck,
+  Loader2
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -33,6 +37,15 @@ export default function ShipmentDetailPage() {
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [timeline, setTimeline] = useState<{ shipment: Shipment; events: TrackingEvent[] } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  // Movement control states
+  const [showStartTripModal, setShowStartTripModal] = useState(false)
+  const [showInterceptModal, setShowInterceptModal] = useState(false)
+  const [showClearModal, setShowClearModal] = useState(false)
+  const [deliveryDays, setDeliveryDays] = useState(3)
+  const [interceptReason, setInterceptReason] = useState('')
+  const [clearReason, setClearReason] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -50,6 +63,51 @@ export default function ShipmentDetailPage() {
       console.error('Failed to load shipment:', error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleStartTrip = async () => {
+    if (!shipment || deliveryDays < 1) return
+    setIsProcessing(true)
+    try {
+      await api.post(`/movement/${shipment.id}/start`, { deliveryDays })
+      await loadData()
+      setShowStartTripModal(false)
+      setDeliveryDays(3)
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to start trip')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleIntercept = async () => {
+    if (!shipment || !interceptReason.trim()) return
+    setIsProcessing(true)
+    try {
+      await api.post(`/movement/${shipment.id}/pause`, { reason: interceptReason.trim() })
+      await loadData()
+      setShowInterceptModal(false)
+      setInterceptReason('')
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to intercept shipment')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleClearGoods = async () => {
+    if (!shipment || !clearReason.trim()) return
+    setIsProcessing(true)
+    try {
+      await api.post(`/movement/${shipment.id}/resume`, { reason: clearReason.trim() })
+      await loadData()
+      setShowClearModal(false)
+      setClearReason('')
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to clear goods')
+    } finally {
+      setIsProcessing(false)
     }
   }
 
@@ -151,22 +209,103 @@ export default function ShipmentDetailPage() {
                   </div>
                 )}
                 {shipment.movementState && (
-                  <div className={`flex items-center p-4 rounded-xl ${shipment.movementState.isMoving ? 'bg-green-50' : 'bg-yellow-50'}`}>
+                  <div className={`flex items-center p-4 rounded-xl ${shipment.movementState.isMoving ? 'bg-green-50' : 'bg-red-50'}`}>
                     {shipment.movementState.isMoving ? (
                       <Play className="w-5 h-5 text-green-500 mr-3" fill="currentColor" />
                     ) : (
-                      <Pause className="w-5 h-5 text-yellow-500 mr-3" fill="currentColor" />
+                      <AlertTriangle className="w-5 h-5 text-red-500 mr-3" />
                     )}
                     <div>
-                      <p className={`text-xs font-medium ${shipment.movementState.isMoving ? 'text-green-600' : 'text-yellow-600'}`}>
+                      <p className={`text-xs font-medium ${shipment.movementState.isMoving ? 'text-green-600' : 'text-red-600'}`}>
                         MOVEMENT STATUS
                       </p>
-                      <p className={`font-medium ${shipment.movementState.isMoving ? 'text-green-700' : 'text-yellow-700'}`}>
-                        {shipment.movementState.isMoving ? 'Active - In Motion' : 'Paused'}
+                      <p className={`font-medium ${shipment.movementState.isMoving ? 'text-green-700' : 'text-red-700'}`}>
+                        {shipment.movementState.isMoving ? 'Active - In Motion' : 'INTERCEPTED'}
                       </p>
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Intercept Reason Display */}
+              {shipment.movementState && !shipment.movementState.isMoving && shipment.movementState.interceptReason && (
+                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+                  <div className="flex items-start">
+                    <AlertTriangle className="w-5 h-5 text-red-500 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-700">Interception Reason:</p>
+                      <p className="text-sm text-red-600 mt-1">{shipment.movementState.interceptReason}</p>
+                      {shipment.movementState.pausedAt && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Intercepted at: {formatDate(shipment.movementState.pausedAt)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Movement Control Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-[#333366] px-6 py-4">
+              <h2 className="text-lg font-semibold text-white">Movement Control</h2>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-3 gap-3">
+                {/* Start Trip Button */}
+                <button
+                  onClick={() => setShowStartTripModal(true)}
+                  disabled={shipment.currentStatus === 'DELIVERED' || shipment.currentStatus === 'CANCELLED' || shipment.currentStatus === 'IN_TRANSIT' || shipment.movementState !== null}
+                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                    shipment.currentStatus === 'DELIVERED' || shipment.currentStatus === 'CANCELLED' || shipment.currentStatus === 'IN_TRANSIT' || shipment.movementState !== null
+                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                      : 'border-green-200 bg-green-50 text-green-700 hover:border-green-400 hover:bg-green-100 cursor-pointer'
+                  }`}
+                >
+                  <Play className="w-5 h-5 mb-1" fill="currentColor" />
+                  <span className="text-sm font-semibold">Start Trip</span>
+                </button>
+
+                {/* Intercept Button */}
+                <button
+                  onClick={() => setShowInterceptModal(true)}
+                  disabled={!shipment.movementState?.isMoving || shipment.currentStatus === 'DELIVERED' || shipment.currentStatus === 'CANCELLED'}
+                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                    !shipment.movementState?.isMoving || shipment.currentStatus === 'DELIVERED' || shipment.currentStatus === 'CANCELLED'
+                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                      : 'border-red-200 bg-red-50 text-red-700 hover:border-red-400 hover:bg-red-100 cursor-pointer'
+                  }`}
+                >
+                  <AlertTriangle className="w-5 h-5 mb-1" />
+                  <span className="text-sm font-semibold">Intercept</span>
+                </button>
+
+                {/* Clear Goods Button */}
+                <button
+                  onClick={() => setShowClearModal(true)}
+                  disabled={!shipment.movementState || shipment.movementState.isMoving !== false || shipment.currentStatus === 'DELIVERED' || shipment.currentStatus === 'CANCELLED'}
+                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                    !shipment.movementState || shipment.movementState.isMoving !== false || shipment.currentStatus === 'DELIVERED' || shipment.currentStatus === 'CANCELLED'
+                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                      : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-400 hover:bg-emerald-100 cursor-pointer'
+                  }`}
+                >
+                  <ShieldCheck className="w-5 h-5 mb-1" />
+                  <span className="text-sm font-semibold">Clear Goods</span>
+                </button>
+              </div>
+
+              {/* Status Info */}
+              <div className="mt-3 p-2 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-600 text-center">
+                  {shipment.currentStatus === 'DELIVERED' && 'Shipment delivered.'}
+                  {shipment.currentStatus === 'CANCELLED' && 'Shipment cancelled.'}
+                  {(shipment.currentStatus === 'PENDING' || shipment.currentStatus === 'PICKED_UP') && !shipment.movementState && 'Click "Start Trip" to begin movement.'}
+                  {shipment.movementState?.isMoving && 'In motion. Click "Intercept" to stop.'}
+                  {shipment.movementState && !shipment.movementState.isMoving && shipment.currentStatus !== 'DELIVERED' && shipment.currentStatus !== 'CANCELLED' && 'Intercepted. Click "Clear Goods" to resume.'}
+                </p>
               </div>
             </div>
           </div>
@@ -473,6 +612,178 @@ export default function ShipmentDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Start Trip Modal */}
+      {showStartTripModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="bg-green-600 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white flex items-center">
+                <Play className="w-5 h-5 mr-2" fill="currentColor" />
+                Start Trip
+              </h3>
+              <button onClick={() => setShowStartTripModal(false)} className="text-white/80 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-600 mb-4">
+                Set the estimated delivery time for this shipment. The tracking simulation will complete within this period.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estimated Delivery Days
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  value={deliveryDays}
+                  onChange={(e) => setDeliveryDays(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  The shipment will arrive at destination in approximately {deliveryDays} day{deliveryDays > 1 ? 's' : ''}.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowStartTripModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStartTrip}
+                  disabled={isProcessing}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 mr-2" fill="currentColor" />
+                      Start Trip
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Intercept Modal */}
+      {showInterceptModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white flex items-center">
+                <AlertTriangle className="w-5 h-5 mr-2" />
+                Intercept Shipment
+              </h3>
+              <button onClick={() => setShowInterceptModal(false)} className="text-white/80 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-600 mb-4">
+                This will stop the shipment movement immediately. The user will be notified about the interception.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for Interception <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={interceptReason}
+                  onChange={(e) => setInterceptReason(e.target.value)}
+                  placeholder="e.g., Customs inspection required, Address verification needed, Security check..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowInterceptModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleIntercept}
+                  disabled={isProcessing || !interceptReason.trim()}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-4 h-4 mr-2" />
+                      Intercept
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Goods Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="bg-emerald-600 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white flex items-center">
+                <ShieldCheck className="w-5 h-5 mr-2" />
+                Clear Goods
+              </h3>
+              <button onClick={() => setShowClearModal(false)} className="text-white/80 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-600 mb-4">
+                This will resume the shipment movement. The user will be notified that the goods have been cleared.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Clearance Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={clearReason}
+                  onChange={(e) => setClearReason(e.target.value)}
+                  placeholder="e.g., Inspection completed - all clear, Documents verified, Security check passed..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowClearModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleClearGoods}
+                  disabled={isProcessing || !clearReason.trim()}
+                  className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4 mr-2" />
+                      Clear Goods
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

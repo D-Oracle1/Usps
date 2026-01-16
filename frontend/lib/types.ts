@@ -95,6 +95,8 @@ export interface MovementState {
   pausedBy: string | null
   pausedAt: string | null
   resumedAt: string | null
+  interceptReason: string | null
+  clearReason: string | null
   updatedAt: string
   pausedByAdmin?: {
     id: string

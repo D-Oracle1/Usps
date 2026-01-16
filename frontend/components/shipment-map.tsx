@@ -1,9 +1,10 @@
 'use client'
 
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet"
-import { useEffect, useRef, useMemo, useState } from "react"
+import { useEffect, useRef, useMemo, useState, useCallback } from "react"
 import L from "leaflet"
 import type { Shipment, Location } from "@/lib/types"
+import api from "@/lib/api"
 import {
   Package,
   MapPin,
@@ -15,7 +16,8 @@ import {
   ChevronDown,
   ChevronUp,
   Navigation,
-  AlertCircle
+  AlertCircle,
+  GripVertical
 } from "lucide-react"
 
 interface Props {
@@ -90,61 +92,141 @@ const truckIcon = L.divIcon({
   iconAnchor: [24, 24],
 })
 
+// City coordinates for mapping location strings
+const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  'new york': { lat: 40.7128, lng: -74.0060 },
+  'los angeles': { lat: 34.0522, lng: -118.2437 },
+  'chicago': { lat: 41.8781, lng: -87.6298 },
+  'houston': { lat: 29.7604, lng: -95.3698 },
+  'phoenix': { lat: 33.4484, lng: -112.0740 },
+  'philadelphia': { lat: 39.9526, lng: -75.1652 },
+  'san antonio': { lat: 29.4241, lng: -98.4936 },
+  'san diego': { lat: 32.7157, lng: -117.1611 },
+  'dallas': { lat: 32.7767, lng: -96.7970 },
+  'austin': { lat: 30.2672, lng: -97.7431 },
+  'san francisco': { lat: 37.7749, lng: -122.4194 },
+  'seattle': { lat: 47.6062, lng: -122.3321 },
+  'denver': { lat: 39.7392, lng: -104.9903 },
+  'boston': { lat: 42.3601, lng: -71.0589 },
+  'miami': { lat: 25.7617, lng: -80.1918 },
+  'atlanta': { lat: 33.7490, lng: -84.3880 },
+  'washington': { lat: 38.9072, lng: -77.0369 },
+  'las vegas': { lat: 36.1699, lng: -115.1398 },
+  'portland': { lat: 45.5152, lng: -122.6784 },
+  'detroit': { lat: 42.3314, lng: -83.0458 },
+  'minneapolis': { lat: 44.9778, lng: -93.2650 },
+  'tampa': { lat: 27.9506, lng: -82.4572 },
+  'orlando': { lat: 28.5383, lng: -81.3792 },
+  'cleveland': { lat: 41.4993, lng: -81.6944 },
+  'pittsburgh': { lat: 40.4406, lng: -79.9959 },
+  'charlotte': { lat: 35.2271, lng: -80.8431 },
+  'indianapolis': { lat: 39.7684, lng: -86.1581 },
+  'nashville': { lat: 36.1627, lng: -86.7816 },
+  'memphis': { lat: 35.1495, lng: -90.0490 },
+  'new orleans': { lat: 29.9511, lng: -90.0715 },
+}
+
+// Get coordinates from location string
+function getCityCoordinates(location: string): L.LatLng {
+  const normalized = location.toLowerCase()
+  for (const [city, coords] of Object.entries(CITY_COORDINATES)) {
+    if (normalized.includes(city)) {
+      return L.latLng(coords.lat, coords.lng)
+    }
+  }
+  // Default to center of US
+  return L.latLng(39.8283, -98.5795)
+}
+
 // Inner component that handles map logic
-function MapContent({ shipment, route, currentPosition }: {
+function MapContent({ shipment, route, currentPosition, onLocationUpdate }: {
   shipment: Shipment
   route: L.LatLng[]
   currentPosition: L.LatLng | null
+  onLocationUpdate: (lat: number, lng: number) => void
 }) {
   const map = useMap()
   const hasInitialized = useRef(false)
+  const markerRef = useRef<L.Marker | null>(null)
+
+  // Get origin and destination from shipment location strings
+  const origin = useMemo(() => getCityCoordinates(shipment.originLocation), [shipment.originLocation])
+  const destination = useMemo(() => getCityCoordinates(shipment.destinationLocation), [shipment.destinationLocation])
+
+  // Generate route line from origin to destination
+  const routeLine = useMemo(() => {
+    const points: L.LatLng[] = []
+    const steps = 20
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps
+      points.push(L.latLng(
+        origin.lat + (destination.lat - origin.lat) * t,
+        origin.lng + (destination.lng - origin.lng) * t
+      ))
+    }
+    return points
+  }, [origin, destination])
 
   // Fit bounds to show entire route on mount
   useEffect(() => {
     if (hasInitialized.current) return
 
-    if (route.length >= 2) {
-      const bounds = L.latLngBounds(route)
-      map.fitBounds(bounds, { padding: [80, 80] })
-      hasInitialized.current = true
-    } else if (currentPosition) {
-      map.setView(currentPosition, 12)
-      hasInitialized.current = true
-    }
-  }, [map, route, currentPosition])
+    const bounds = L.latLngBounds([origin, destination])
+    map.fitBounds(bounds, { padding: [80, 80] })
+    hasInitialized.current = true
+  }, [map, origin, destination])
 
-  // Get origin and destination from route
-  const origin = route.length > 0 ? route[0] : null
-  const destination = route.length > 1 ? route[route.length - 1] : null
+  // Handle marker drag end
+  const handleDragEnd = useCallback(() => {
+    const marker = markerRef.current
+    if (marker) {
+      const position = marker.getLatLng()
+      onLocationUpdate(position.lat, position.lng)
+    }
+  }, [onLocationUpdate])
 
   return (
     <>
-      {/* Route line showing the path */}
+      {/* Route line from origin to destination */}
+      <Polyline
+        positions={routeLine}
+        pathOptions={{
+          color: "#333366",
+          weight: 4,
+          opacity: 0.6,
+          dashArray: shipment.currentStatus === 'DELIVERED' ? undefined : '10, 10'
+        }}
+      />
+
+      {/* Traveled path (recorded locations) */}
       {route.length >= 2 && (
         <Polyline
           positions={route}
           pathOptions={{
             color: "#2563eb",
-            weight: 4,
-            opacity: 0.8,
-            dashArray: shipment.currentStatus === 'DELIVERED' ? undefined : '10, 10'
+            weight: 5,
+            opacity: 0.9,
           }}
         />
       )}
 
       {/* Origin marker */}
-      {origin && (
-        <Marker position={origin} icon={originIcon} />
-      )}
+      <Marker position={origin} icon={originIcon} />
 
       {/* Destination marker */}
-      {destination && (
-        <Marker position={destination} icon={destinationIcon} />
-      )}
+      <Marker position={destination} icon={destinationIcon} />
 
-      {/* Current position / truck marker */}
-      {currentPosition && shipment.currentStatus !== 'DELIVERED' && shipment.currentStatus !== 'PENDING' && (
-        <Marker position={currentPosition} icon={truckIcon} />
+      {/* Current position / truck marker - DRAGGABLE (always show for admin) */}
+      {shipment.currentStatus !== 'DELIVERED' && shipment.currentStatus !== 'CANCELLED' && (
+        <Marker
+          position={currentPosition || origin}
+          icon={truckIcon}
+          draggable={true}
+          ref={markerRef}
+          eventHandlers={{
+            dragend: handleDragEnd,
+          }}
+        />
       )}
     </>
   )
@@ -324,6 +406,27 @@ function ShipmentInfoPanel({ shipment, isExpanded, onToggle }: {
 // Main component
 export default function ShipmentMap({ shipment, onMovementStateChange }: Props) {
   const [isInfoExpanded, setIsInfoExpanded] = useState(true)
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  // Handle location update when marker is dragged
+  const handleLocationUpdate = useCallback(async (lat: number, lng: number) => {
+    setIsUpdating(true)
+    try {
+      await api.post(`/movement/${shipment.id}/update-location`, {
+        latitude: lat,
+        longitude: lng,
+      })
+      // Refresh the shipment data
+      if (onMovementStateChange) {
+        onMovementStateChange()
+      }
+    } catch (error) {
+      console.error('Failed to update location:', error)
+      alert('Failed to update location')
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [shipment.id, onMovementStateChange])
 
   // Build route from locations array
   const { route, currentPosition } = useMemo(() => {
@@ -351,17 +454,21 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     return { route: routePoints, currentPosition: currentPos }
   }, [shipment.locations])
 
+  // Get origin coordinates for initial center
+  const originCoords = useMemo(() => getCityCoordinates(shipment.originLocation), [shipment.originLocation])
+  const destCoords = useMemo(() => getCityCoordinates(shipment.destinationLocation), [shipment.destinationLocation])
+
   // Calculate center for the map
   const center = useMemo(() => {
     if (currentPosition) {
       return currentPosition
     }
-    if (route.length > 0) {
-      return route[0]
-    }
-    // Default to center of US
-    return L.latLng(39.8283, -98.5795)
-  }, [route, currentPosition])
+    // Center between origin and destination
+    return L.latLng(
+      (originCoords.lat + destCoords.lat) / 2,
+      (originCoords.lng + destCoords.lng) / 2
+    )
+  }, [currentPosition, originCoords, destCoords])
 
   // No locations message
   const hasNoLocations = !shipment.locations || shipment.locations.length === 0
@@ -382,6 +489,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
           shipment={shipment}
           route={route}
           currentPosition={currentPosition}
+          onLocationUpdate={handleLocationUpdate}
         />
       </MapContainer>
 
@@ -392,16 +500,22 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
         onToggle={() => setIsInfoExpanded(!isInfoExpanded)}
       />
 
-      {/* No locations warning */}
-      {hasNoLocations && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-[1000]">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 shadow-lg">
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 text-yellow-600" />
-              <p className="text-sm text-yellow-800">
-                No location data recorded yet. The map will update once tracking begins.
-              </p>
-            </div>
+      {/* Updating indicator */}
+      {isUpdating && (
+        <div className="absolute top-4 right-4 z-[1000] bg-blue-600 text-white rounded-lg px-4 py-2 shadow-lg">
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm font-medium">Updating location...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Drag hint */}
+      {currentPosition && shipment.currentStatus !== 'DELIVERED' && shipment.currentStatus !== 'PENDING' && !isUpdating && (
+        <div className="absolute top-4 right-4 z-[1000] bg-white rounded-lg shadow-lg px-3 py-2">
+          <div className="flex items-center space-x-2">
+            <GripVertical className="w-4 h-4 text-gray-500" />
+            <span className="text-xs text-gray-600">Drag truck to update location</span>
           </div>
         </div>
       )}
