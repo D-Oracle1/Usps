@@ -24,5 +24,5 @@ RUN npm prune --production
 # Expose port
 EXPOSE 3000
 
-# Start the application directly (run migrations separately if needed)
-CMD ["node", "dist/main.js"]
+# Push schema (with 30s timeout) then start the application
+CMD ["sh", "-c", "timeout 30 npx prisma db push --accept-data-loss || true; node dist/main.js"]
