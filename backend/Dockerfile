@@ -24,5 +24,5 @@ RUN npm prune --production
 # Expose port
 EXPOSE 3000
 
-# Sync schema and start the application
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss || echo 'DB push failed'; node dist/main.js"]
+# Start the application (schema already pushed via Supabase)
+CMD ["node", "dist/main.js"]
