@@ -468,7 +468,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     }
   }
 
-  // Handle Manual Address Entry
+  // Handle Manual Address Entry (when shipment is intercepted)
   const handleAddressSubmit = async () => {
     if (!addressInput.trim()) return
 
@@ -478,10 +478,6 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
     try {
       const coords = await geocodeAddress(addressInput)
       if (coords) {
-        // Update position
-        setPosition([coords.lat, coords.lng])
-        animateToPosition(coords.lat, coords.lng)
-
         // Send location update to backend with forceUpdate flag
         try {
           await api.post(`/locations`, {
@@ -498,6 +494,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
           setError('Failed to save location to server')
         }
 
+        // Update current location display (animation is paused during interception)
         setCurrentLocation({
           id: 'manual',
           shipmentId: shipment.id,
@@ -507,6 +504,16 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
           heading: null,
           recordedAt: new Date().toISOString()
         })
+
+        // Update animation start position to new location for when it resumes
+        if (animationConfig) {
+          setAnimationConfig(prev => prev ? {
+            ...prev,
+            startPosition: { lat: coords.lat, lng: coords.lng },
+          } : null)
+          // Reset animation to start from new position
+          resetAnimation()
+        }
 
         setAddressInput('')
         setError('')
@@ -753,7 +760,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Shipmen
       <div className="absolute inset-0 rounded-lg overflow-hidden">
         {mapReady && (
           <MapContainer
-            center={position}
+            center={animatedPosition}
             zoom={8}
             style={{ height: '100%', width: '100%' }}
             scrollWheelZoom={true}
