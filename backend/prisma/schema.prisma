@@ -133,6 +133,13 @@ model Shipment {
   tripStartedAt       DateTime? @map("trip_started_at")
   averageSpeed        Float?   @default(45) @map("average_speed")
 
+  // Optional route data for advanced tracking (backward-compatible)
+  // Stored as JSON array of {lat, lng, cumulativeDistance?}
+  route               Json?    @map("route")
+  // Optional stops for multi-stop shipments (backward-compatible)
+  // Stored as JSON array of {id, type, lat, lng, label?, dwellTimeMs?, completed?, completedAt?}
+  stops               Json?    @map("stops")
+
   // Relations
   trackingEvents      TrackingEvent[]
   locations           ShipmentLocation[]
@@ -236,6 +243,10 @@ enum ShipmentStatus {
   DELIVERED
   FAILED
   CANCELLED
+  // Extended statuses for interception/clearance workflow (backward-compatible)
+  INTERCEPTED
+  AT_CLEARANCE
+  CLEARED
 }
 
 // Support Chat Enums

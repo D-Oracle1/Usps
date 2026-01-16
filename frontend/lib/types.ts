@@ -52,6 +52,33 @@ export interface Shipment {
     trackingEvents: number
     locations: number
   }
+
+  // Optional route data for advanced tracking (backward-compatible)
+  route?: RoutePoint[]
+  // Optional stops for multi-stop shipments (backward-compatible)
+  stops?: ShipmentStop[]
+}
+
+// Route point for polyline following
+export interface RoutePoint {
+  lat: number
+  lng: number
+  cumulativeDistance?: number
+}
+
+// Stop types for multi-stop shipments
+export type StopType = 'PICKUP' | 'INTERCEPTION' | 'CLEARANCE' | 'DELIVERY' | 'WAYPOINT'
+
+// Multi-stop shipment support
+export interface ShipmentStop {
+  id: string
+  type: StopType
+  lat: number
+  lng: number
+  label?: string
+  dwellTimeMs?: number
+  completed?: boolean
+  completedAt?: string
 }
 
 export type ShipmentStatus =
@@ -62,6 +89,10 @@ export type ShipmentStatus =
   | 'DELIVERED'
   | 'FAILED'
   | 'CANCELLED'
+  // Extended statuses for interception/clearance workflow
+  | 'INTERCEPTED'
+  | 'AT_CLEARANCE'
+  | 'CLEARED'
 
 export interface TrackingEvent {
   id: string
