@@ -2,9 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files from backend directory
-COPY backend/package*.json ./
-COPY backend/prisma ./prisma/
+# Copy package files
+COPY package*.json ./
+COPY prisma ./prisma/
 
 # Install dependencies
 RUN npm ci
@@ -13,7 +13,7 @@ RUN npm ci
 RUN npx prisma generate
 
 # Copy source code
-COPY backend/ .
+COPY . .
 
 # Build the application
 RUN npm run build
@@ -24,8 +24,8 @@ FROM node:20-alpine AS production
 WORKDIR /app
 
 # Copy package files
-COPY backend/package*.json ./
-COPY backend/prisma ./prisma/
+COPY package*.json ./
+COPY prisma ./prisma/
 
 # Install production dependencies only
 RUN npm ci --only=production
@@ -39,5 +39,5 @@ COPY --from=builder /app/dist ./dist
 # Expose port
 EXPOSE 3000
 
-# Start the application
-CMD ["node", "dist/main.js"]
+# Run prisma db push and start the application
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main.js"]
