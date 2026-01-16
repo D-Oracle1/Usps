@@ -70,7 +70,11 @@
       "Bash(command -v:*)",
       "Bash(\"$HOME/AppData/Roaming/npm/railway\" --help)",
       "Bash(\"/c/Users/Tech Oracle/AppData/Roaming/npm/railway\" --help)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(npx prisma db execute:*)",
+      "Bash(npx prisma db pull:*)",
+      "Bash(DEBUG=\"*\" npx prisma db push:*)",
+      "Bash(ss:*)"
     ]
   }
 }
