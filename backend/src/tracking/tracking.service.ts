@@ -83,6 +83,23 @@ export class TrackingService {
   async getTimelineByTrackingNumber(trackingNumber: string) {
     const shipment = await this.prisma.shipment.findUnique({
       where: { trackingNumber },
+      include: {
+        movementState: {
+          include: {
+            pausedByAdmin: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        locations: {
+          orderBy: { recordedAt: 'desc' },
+          take: 50,
+        },
+      },
     });
 
     if (!shipment) {
@@ -93,6 +110,15 @@ export class TrackingService {
       where: { shipmentId: shipment.id },
       orderBy: {
         eventTime: 'desc',
+      },
+      include: {
+        admin: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
