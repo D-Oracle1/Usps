@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import api from '@/lib/api'
 import type { Shipment } from '@/lib/types'
-import ShipmentMap from '@/components/shipment-map'
+import ShipmentMap from '@/app/components/shipment/ShipmentMap'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
