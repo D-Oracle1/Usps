@@ -35,6 +35,8 @@ export class NotificationController {
       estimatedArrival: null,
       tripStartedAt: null,
       averageSpeed: null,
+      route: null,
+      stops: null,
     };
 
     const success = await this.notificationService.sendShipmentCreatedEmail(
