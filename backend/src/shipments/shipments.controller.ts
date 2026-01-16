@@ -12,19 +12,21 @@ import {
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto, UpdateShipmentDto } from './dto/shipment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 
 @Controller('shipments')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ShipmentsController {
   constructor(private readonly shipmentsService: ShipmentsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   create(@Body() createShipmentDto: CreateShipmentDto) {
     return this.shipmentsService.create(createShipmentDto);
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
   findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.shipmentsService.findAll(
       page ? parseInt(page) : 1,
@@ -33,7 +35,7 @@ export class ShipmentsController {
   }
 
   @Get('statistics')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   getStatistics() {
     return this.shipmentsService.getStatistics();
   }
@@ -44,37 +46,37 @@ export class ShipmentsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
   findOne(@Param('id') id: string) {
     return this.shipmentsService.findOne(id);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   update(@Param('id') id: string, @Body() updateShipmentDto: UpdateShipmentDto) {
     return this.shipmentsService.update(id, updateShipmentDto);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   remove(@Param('id') id: string) {
     return this.shipmentsService.remove(id);
   }
 
   @Post('bulk/update-status')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   bulkUpdateStatus(@Body() body: { shipmentIds: string[]; status: string }) {
     return this.shipmentsService.bulkUpdateStatus(body.shipmentIds, body.status);
   }
 
   @Post('bulk/delete')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   bulkDelete(@Body() body: { shipmentIds: string[] }) {
     return this.shipmentsService.bulkDelete(body.shipmentIds);
   }
 
   @Get('export')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   exportShipments() {
     return this.shipmentsService.exportShipments();
   }

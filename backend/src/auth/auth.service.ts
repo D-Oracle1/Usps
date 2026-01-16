@@ -53,12 +53,14 @@ export class AuthService {
   async register(createAdminDto: CreateAdminDto) {
     const hashedPassword = await bcrypt.hash(createAdminDto.password, 10);
 
+    // Always create USER accounts via public registration
+    // ADMIN accounts must be created by existing SUPER_ADMIN
     const user = await this.prisma.adminUser.create({
       data: {
         name: createAdminDto.name,
         email: createAdminDto.email,
         passwordHash: hashedPassword,
-        role: (createAdminDto.role as any) || 'ADMIN',
+        role: 'USER',
       },
     });
 

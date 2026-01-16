@@ -75,7 +75,7 @@ function TrackingPageContent() {
               <span>English</span>
             </div>
             <div className="flex items-center space-x-4">
-              <Link href="/auth/login" className="hover:underline">Admin Portal</Link>
+              <span className="text-gray-300">Track Your Package</span>
             </div>
           </div>
         </div>

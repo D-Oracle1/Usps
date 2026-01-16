@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { MovementService } from './movement.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard, Roles } from '../auth/guards/roles.guard';
 import { IsString, IsNotEmpty, IsNumber, IsOptional, Min } from 'class-validator';
 
 class StartMovementDto {
@@ -36,11 +37,12 @@ class ChangeAddressDto {
 }
 
 @Controller('movement')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class MovementController {
   constructor(private readonly movementService: MovementService) {}
 
   @Post(':shipmentId/start')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   startMovement(
     @Param('shipmentId') shipmentId: string,
     @Body() dto: StartMovementDto,
@@ -54,7 +56,7 @@ export class MovementController {
   }
 
   @Post(':shipmentId/pause')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   pauseShipment(
     @Param('shipmentId') shipmentId: string,
     @Body() dto: PauseShipmentDto,
@@ -68,7 +70,7 @@ export class MovementController {
   }
 
   @Post(':shipmentId/resume')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   resumeShipment(
     @Param('shipmentId') shipmentId: string,
     @Body() dto: ResumeShipmentDto,
@@ -82,37 +84,37 @@ export class MovementController {
   }
 
   @Post(':shipmentId/cancel')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   cancelShipment(@Param('shipmentId') shipmentId: string, @Request() req) {
     return this.movementService.cancelShipment(shipmentId, req.user.userId);
   }
 
   @Get(':shipmentId/state')
-  @UseGuards(JwtAuthGuard)
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
   getMovementState(@Param('shipmentId') shipmentId: string) {
     return this.movementService.getMovementState(shipmentId);
   }
 
   @Get(':shipmentId/history')
-  @UseGuards(JwtAuthGuard)
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
   getMovementHistory(@Param('shipmentId') shipmentId: string) {
     return this.movementService.getMovementHistory(shipmentId);
   }
 
   @Get(':shipmentId/route')
-  @UseGuards(JwtAuthGuard)
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
   getRoute(@Param('shipmentId') shipmentId: string) {
     return this.movementService.getRoute(shipmentId);
   }
 
   @Get(':shipmentId/trip-info')
-  @UseGuards(JwtAuthGuard)
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
   getTripInfo(@Param('shipmentId') shipmentId: string) {
     return this.movementService.getTripInfo(shipmentId);
   }
 
   @Post(':shipmentId/calculate-address-change-fee')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   calculateAddressChangeFee(
     @Param('shipmentId') shipmentId: string,
     @Body() dto: ChangeAddressDto,
@@ -124,7 +126,7 @@ export class MovementController {
   }
 
   @Post(':shipmentId/change-address')
-  @UseGuards(JwtAuthGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   applyAddressChange(
     @Param('shipmentId') shipmentId: string,
     @Body() dto: ChangeAddressDto,
