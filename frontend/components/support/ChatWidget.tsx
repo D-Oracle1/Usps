@@ -1,24 +1,45 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { MessageCircle, X, Minimize2, Maximize2, LogOut } from 'lucide-react'
 import { useSupportAuth } from '@/lib/support-auth-context'
+import { getSupportSocket } from '@/lib/support-socket'
 import ChatAuthModal from './ChatAuthModal'
 import ChatWindow from './ChatWindow'
 
 export default function ChatWidget() {
-  const { user, logout, isLoading } = useSupportAuth()
+  const { user, logout, isLoading, token } = useSupportAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
-  const [hasUnread, setHasUnread] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   // Reset unread when opening
   useEffect(() => {
-    if (isOpen) {
-      setHasUnread(false)
+    if (isOpen && !isMinimized) {
+      setUnreadCount(0)
     }
-  }, [isOpen])
+  }, [isOpen, isMinimized])
+
+  // Listen for new messages via WebSocket when user is logged in but chat is closed
+  useEffect(() => {
+    if (!token || !user) return
+
+    const socket = getSupportSocket(token)
+
+    const handleNewMessage = (message: any) => {
+      // Only count messages from admin when chat is closed or minimized
+      if (message.senderType === 'ADMIN' && (!isOpen || isMinimized)) {
+        setUnreadCount(prev => prev + 1)
+      }
+    }
+
+    socket.on('newMessage', handleNewMessage)
+
+    return () => {
+      socket.off('newMessage', handleNewMessage)
+    }
+  }, [token, user, isOpen, isMinimized])
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -49,9 +70,9 @@ export default function ChatWidget() {
           aria-label="Open support chat"
         >
           <MessageCircle className="w-6 h-6" />
-          {hasUnread && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#cc0000] rounded-full flex items-center justify-center text-xs font-bold animate-pulse">
-              !
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-[#cc0000] rounded-full flex items-center justify-center text-xs font-bold animate-pulse">
+              {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
           <span className="absolute right-full mr-3 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">

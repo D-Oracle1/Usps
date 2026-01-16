@@ -4,7 +4,9 @@ import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Package, BarChart3, LogOut, Menu, X, Home, Plus, Truck, Search, Bell, User, ChevronDown, MapPin, MessageCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import api from '@/lib/api'
+import { getSupportSocket } from '@/lib/support-socket'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -14,10 +16,64 @@ const navigation = [
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth()
+  const { user, logout, token } = useAuth()
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Fetch unread message count
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const response = await api.get('/support/admin/statistics')
+      setUnreadCount(response.data.unreadMessages || 0)
+    } catch (error) {
+      console.error('Failed to fetch unread count:', error)
+    }
+  }, [])
+
+  // Load unread count on mount and set up WebSocket for real-time updates
+  useEffect(() => {
+    fetchUnreadCount()
+
+    // Set up interval to refresh count periodically
+    const interval = setInterval(fetchUnreadCount, 30000)
+
+    return () => clearInterval(interval)
+  }, [fetchUnreadCount])
+
+  // Listen to WebSocket for real-time notification updates
+  useEffect(() => {
+    if (!token) return
+
+    const socket = getSupportSocket(token)
+
+    const handleNewMessage = () => {
+      // Refresh unread count when new message arrives
+      fetchUnreadCount()
+    }
+
+    const handleConversationUpdated = () => {
+      fetchUnreadCount()
+    }
+
+    socket.on('newMessage', handleNewMessage)
+    socket.on('conversationUpdated', handleConversationUpdated)
+
+    return () => {
+      socket.off('newMessage', handleNewMessage)
+      socket.off('conversationUpdated', handleConversationUpdated)
+    }
+  }, [token, fetchUnreadCount])
+
+  // Reset unread count when on support page
+  useEffect(() => {
+    if (pathname === '/dashboard/support') {
+      // Delay slightly to let the page mark messages as read
+      const timeout = setTimeout(fetchUnreadCount, 1000)
+      return () => clearTimeout(timeout)
+    }
+  }, [pathname, fetchUnreadCount])
 
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
@@ -66,11 +122,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {navigation.map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
+                const showBadge = item.name === 'Support Chat' && unreadCount > 0
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`flex items-center px-4 py-2 text-sm font-medium rounded transition-colors ${
+                    className={`relative flex items-center px-4 py-2 text-sm font-medium rounded transition-colors ${
                       isActive
                         ? 'bg-[#333366] text-white'
                         : 'text-[#333366] hover:bg-gray-100'
@@ -78,6 +135,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   >
                     <Icon className="w-4 h-4 mr-2" />
                     {item.name}
+                    {showBadge && (
+                      <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 bg-[#cc0000] text-white text-xs font-bold rounded-full flex items-center justify-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </Link>
                 )
               })}
@@ -146,12 +208,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {navigation.map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
+                const showBadge = item.name === 'Support Chat' && unreadCount > 0
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center px-4 py-3 text-sm font-medium rounded ${
+                    className={`relative flex items-center px-4 py-3 text-sm font-medium rounded ${
                       isActive
                         ? 'bg-[#333366] text-white'
                         : 'text-[#333366] hover:bg-gray-100'
@@ -159,6 +222,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   >
                     <Icon className="w-5 h-5 mr-3" />
                     {item.name}
+                    {showBadge && (
+                      <span className="ml-auto min-w-[20px] h-5 px-1.5 bg-[#cc0000] text-white text-xs font-bold rounded-full flex items-center justify-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </Link>
                 )
               })}

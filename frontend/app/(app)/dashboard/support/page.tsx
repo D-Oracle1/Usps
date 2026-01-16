@@ -86,9 +86,26 @@ export default function AdminSupportPage() {
       // Update messages if in active conversation
       if (activeConversationRef.current && message.conversationId === activeConversationRef.current) {
         setMessages(prev => {
-          // Prevent duplicates
+          // Prevent duplicates - check by ID
           if (prev.some(m => m.id === message.id)) {
             return prev
+          }
+          // Also check if this is our own message that we added optimistically
+          // (optimistic messages have temp-* IDs, but same content)
+          if (message.senderType === 'ADMIN') {
+            const hasSimilarOptimistic = prev.some(m =>
+              m.id.startsWith('temp-') &&
+              m.content === message.content &&
+              m.senderType === 'ADMIN'
+            )
+            if (hasSimilarOptimistic) {
+              // Replace the optimistic message with the real one
+              return prev.map(m =>
+                m.id.startsWith('temp-') && m.content === message.content && m.senderType === 'ADMIN'
+                  ? message
+                  : m
+              )
+            }
           }
           return [...prev, message]
         })
