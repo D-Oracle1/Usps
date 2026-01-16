@@ -63,7 +63,10 @@
       "Bash(node --version:*)",
       "Bash(cmd //c \"start /B npm run start:dev\")",
       "Bash(cmd //c \"start /B npm run dev\")",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(git merge:*)"
     ]
   }
 }
