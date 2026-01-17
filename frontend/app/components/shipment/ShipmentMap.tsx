@@ -531,7 +531,7 @@ function InfoPanel({
   )
 }
 
-// Speed control presets
+// Animation speed presets (multiplier)
 const SPEED_PRESETS = [
   { label: '0.5x', value: 0.5 },
   { label: '1x', value: 1 },
@@ -539,6 +539,20 @@ const SPEED_PRESETS = [
   { label: '5x', value: 5 },
   { label: '10x', value: 10 },
 ]
+
+// Vehicle speed presets in MPH
+const VEHICLE_SPEED_PRESETS = [
+  { label: '5 mph', value: 8 },      // ~8 km/h
+  { label: '15 mph', value: 24 },    // ~24 km/h
+  { label: '25 mph', value: 40 },    // ~40 km/h
+  { label: '35 mph', value: 56 },    // ~56 km/h
+  { label: '45 mph', value: 72 },    // ~72 km/h
+  { label: '55 mph', value: 89 },    // ~89 km/h
+  { label: '65 mph', value: 105 },   // ~105 km/h
+]
+
+// Convert mph to km/h
+const mphToKmh = (mph: number) => mph * 1.60934
 
 // Main component
 export default function ShipmentMap({ shipment, onMovementStateChange }: Props) {
@@ -549,6 +563,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
   const [isRouteLoading, setIsRouteLoading] = useState(true)
   const [followTruck, setFollowTruck] = useState(false)
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
+  const [vehicleSpeedKmh, setVehicleSpeedKmh] = useState(105) // Default ~65 mph
   const [truckPosition, setTruckPosition] = useState<L.LatLng | null>(null)
 
   // Marker ref for imperative updates
@@ -659,10 +674,16 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     onArrival: handleArrival
   })
 
-  // Handle speed change
+  // Handle animation speed change (multiplier)
   const handleSpeedChange = useCallback((newSpeed: number) => {
     setSpeedMultiplier(newSpeed)
     movement.setSpeedMultiplier(newSpeed)
+  }, [movement])
+
+  // Handle vehicle speed change (actual vehicle speed in km/h)
+  const handleVehicleSpeedChange = useCallback((speedKmh: number) => {
+    setVehicleSpeedKmh(speedKmh)
+    movement.setVehicleSpeed(speedKmh)
   }, [movement])
 
   // Handle location update from marker drag (with route snapping)
@@ -765,35 +786,67 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
 
       {/* Speed Control Panel */}
       {showTruck && (
-        <div className="absolute top-16 right-4 z-[1000] bg-white rounded-lg shadow-lg p-3">
-          <div className="flex items-center space-x-2 mb-2">
-            <Gauge className="w-4 h-4 text-gray-600" />
-            <span className="text-xs font-medium text-gray-700">Speed Control</span>
+        <div className="absolute top-16 right-4 z-[1000] bg-white rounded-lg shadow-lg p-3 w-48">
+          {/* Vehicle Speed Control */}
+          <div className="mb-3">
+            <div className="flex items-center space-x-2 mb-2">
+              <Gauge className="w-4 h-4 text-blue-600" />
+              <span className="text-xs font-medium text-gray-700">Vehicle Speed</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {VEHICLE_SPEED_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  onClick={() => handleVehicleSpeedChange(preset.value)}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    vehicleSpeedKmh === preset.value
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-xs text-blue-600 text-center font-medium">
+              {Math.round(kmhToMph(vehicleSpeedKmh))} mph
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {SPEED_PRESETS.map((preset) => (
-              <button
-                key={preset.value}
-                onClick={() => handleSpeedChange(preset.value)}
-                className={`px-2 py-1 text-xs rounded transition-colors ${
-                  speedMultiplier === preset.value
-                    ? 'bg-[#333366] text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          <div className="mt-2 text-xs text-gray-500 text-center">
-            Current: {speedMultiplier}x speed
+
+          {/* Divider */}
+          <div className="border-t border-gray-200 my-2"></div>
+
+          {/* Animation Speed Control */}
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <Navigation className="w-4 h-4 text-gray-600" />
+              <span className="text-xs font-medium text-gray-700">Animation Speed</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {SPEED_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  onClick={() => handleSpeedChange(preset.value)}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    speedMultiplier === preset.value
+                      ? 'bg-[#333366] text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-xs text-gray-500 text-center">
+              {speedMultiplier}x animation
+            </div>
           </div>
         </div>
       )}
 
       {/* Truck Tracking Controls */}
       {showTruck && (
-        <div className="absolute top-44 right-4 z-[1000] flex flex-col gap-2">
+        <div className="absolute top-[340px] right-4 z-[1000] flex flex-col gap-2">
           {/* Center on truck button */}
           <button
             onClick={centerOnTruck}

@@ -85,7 +85,9 @@
       "Bash(./node_modules/.bin/tsc:*)",
       "Bash(DATABASE_URL=\"postgresql://user:pass@localhost:5432/db\" npx prisma generate:*)",
       "Bash(grep:*)",
-      "Bash(DIRECT_URL=\"postgresql://postgres.kcnudftcmxtxmwslcbxm:93rMrdfxgFNbMCW@aws-1-eu-west-3.pooler.supabase.com:5432/postgres\" node:*)"
+      "Bash(DIRECT_URL=\"postgresql://postgres.kcnudftcmxtxmwslcbxm:93rMrdfxgFNbMCW@aws-1-eu-west-3.pooler.supabase.com:5432/postgres\" node:*)",
+      "Bash(PORT=3001 node_modules/.bin/nest start:*)",
+      "Bash(timeout:*)"
     ]
   }
 }

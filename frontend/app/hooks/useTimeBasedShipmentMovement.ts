@@ -64,6 +64,10 @@ export interface UseTimeBasedShipmentMovementResult {
   setSpeedMultiplier: (multiplier: number) => void
   /** Get current speed multiplier */
   getSpeedMultiplier: () => number
+  /** Set vehicle speed in km/h - affects ETA and movement duration */
+  setVehicleSpeed: (speedKmh: number) => void
+  /** Get current vehicle speed in km/h */
+  getVehicleSpeed: () => number
   /** Get current state snapshot */
   getState: () => MovementState
   /** Whether currently moving */
@@ -426,6 +430,60 @@ export function useTimeBasedShipmentMovement(
   }, [])
 
   /**
+   * Set vehicle speed in km/h - affects ETA and recalculates trip duration
+   */
+  const setVehicleSpeed = useCallback((speedKmh: number) => {
+    // Clamp speed to reasonable range (1-200 km/h)
+    speedKmh = Math.max(1, Math.min(200, speedKmh))
+
+    // Store current progress before changing speed
+    const currentProgress = currentProgressRef.current
+
+    // Update the speed ref
+    speedRef.current = speedKmh
+
+    // Recalculate duration based on new speed
+    const currentRoute = routeRef.current
+    let totalDistance: number
+
+    if (currentRoute && currentRoute.length > 1) {
+      totalDistance = 0
+      for (let i = 0; i < currentRoute.length - 1; i++) {
+        totalDistance += haversineDistance(currentRoute[i], currentRoute[i + 1])
+      }
+    } else {
+      totalDistance = haversineDistance(originRef.current, destinationRef.current)
+    }
+
+    // Calculate new duration: distance (km) / speed (km/h) * 3600000 (ms/h)
+    const newDurationMs = (totalDistance / speedKmh) * 60 * 60 * 1000
+    durationRef.current = newDurationMs
+
+    // Reset timing to maintain current position with new speed
+    if (isRunningRef.current && startTimeRef.current !== null) {
+      // Calculate how much time should have elapsed to reach current progress
+      const remainingProgress = 1 - currentProgress
+      const remainingDuration = newDurationMs * remainingProgress
+
+      // Adjust start time so animation continues from current position
+      initialProgressRef.current = currentProgress
+      startTimeRef.current = performance.now()
+      totalPausedDurationRef.current = 0
+    }
+
+    // Trigger a state update to reflect new ETA
+    const state = calculateState(currentProgress)
+    onPositionUpdateRef.current(state)
+  }, [calculateState])
+
+  /**
+   * Get current vehicle speed in km/h
+   */
+  const getVehicleSpeed = useCallback((): number => {
+    return speedRef.current
+  }, [])
+
+  /**
    * Get current state snapshot
    */
   const getState = useCallback((): MovementState => {
@@ -543,6 +601,8 @@ export function useTimeBasedShipmentMovement(
     setDestination,
     setSpeedMultiplier,
     getSpeedMultiplier,
+    setVehicleSpeed,
+    getVehicleSpeed,
     getState,
     isMoving
   }
