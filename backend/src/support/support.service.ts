@@ -283,28 +283,55 @@ export class SupportService {
   async getChatStatistics() {
     this.logger.log('Fetching chat statistics');
 
-    const [total, open, pending, resolved, closed] = await Promise.all([
-      this.prisma.conversation.count(),
-      this.prisma.conversation.count({ where: { status: ConversationStatus.OPEN } }),
-      this.prisma.conversation.count({ where: { status: ConversationStatus.PENDING } }),
-      this.prisma.conversation.count({ where: { status: ConversationStatus.RESOLVED } }),
-      this.prisma.conversation.count({ where: { status: ConversationStatus.CLOSED } }),
-    ]);
+    // Retry logic for database connection issues
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-    const unreadMessages = await this.prisma.message.count({
-      where: {
-        isRead: false,
-        senderType: SenderType.USER,
-      },
-    });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const [total, open, pending, resolved, closed] = await Promise.all([
+          this.prisma.conversation.count(),
+          this.prisma.conversation.count({ where: { status: ConversationStatus.OPEN } }),
+          this.prisma.conversation.count({ where: { status: ConversationStatus.PENDING } }),
+          this.prisma.conversation.count({ where: { status: ConversationStatus.RESOLVED } }),
+          this.prisma.conversation.count({ where: { status: ConversationStatus.CLOSED } }),
+        ]);
 
+        const unreadMessages = await this.prisma.message.count({
+          where: {
+            isRead: false,
+            senderType: SenderType.USER,
+          },
+        });
+
+        return {
+          total,
+          open,
+          pending,
+          resolved,
+          closed,
+          unreadMessages,
+        };
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(`Statistics fetch attempt ${attempt}/${maxRetries} failed: ${error.message}`);
+
+        if (attempt < maxRetries) {
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+        }
+      }
+    }
+
+    // If all retries failed, return cached/default values to prevent UI errors
+    this.logger.error(`All ${maxRetries} attempts failed for statistics. Returning defaults.`);
     return {
-      total,
-      open,
-      pending,
-      resolved,
-      closed,
-      unreadMessages,
+      total: 0,
+      open: 0,
+      pending: 0,
+      resolved: 0,
+      closed: 0,
+      unreadMessages: 0,
     };
   }
 }

@@ -51,7 +51,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(access_token)
       setUser(userData)
 
-      router.push('/dashboard')
+      // Redirect based on role
+      if (userData.role === 'ADMIN' || userData.role === 'SUPER_ADMIN') {
+        router.push('/dashboard')
+      } else {
+        router.push('/my-shipments')
+      }
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Login failed')
     }

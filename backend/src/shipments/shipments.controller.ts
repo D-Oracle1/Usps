@@ -126,6 +126,35 @@ export class ShipmentsController {
   }
 
   // Static routes MUST come before parameterized routes
+  @Get('my-shipments')
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
+  async findMyShipments(@Request() req) {
+    this.validateAuth(req, 'GET /shipments/my-shipments');
+
+    const userEmail = req.user.email;
+    if (!userEmail) {
+      this.logger.warn('User email not found in token for my-shipments');
+      throw new BadRequestException('User email not found');
+    }
+
+    this.logger.log(`Fetching shipments for user: ${userEmail}`);
+
+    try {
+      const result = await this.shipmentsService.findByUserEmail(userEmail);
+      this.logger.log(`Found ${result.length} shipments for user ${userEmail}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to fetch user shipments: ${error.message}`, error.stack);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Failed to fetch shipments',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get('statistics')
   @Roles('ADMIN', 'SUPER_ADMIN')
   async getStatistics(@Request() req) {
@@ -247,6 +276,74 @@ export class ShipmentsController {
       }
       throw new HttpException(
         'Failed to delete shipments',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/intercept')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async interceptShipment(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: { reason: string },
+  ) {
+    this.validateAuth(req, `POST /shipments/${id}/intercept`);
+
+    if (!id || id.trim() === '') {
+      throw new BadRequestException('Shipment ID is required');
+    }
+    if (!body?.reason || typeof body.reason !== 'string' || body.reason.trim() === '') {
+      throw new BadRequestException('Intercept reason is required');
+    }
+
+    const adminId = req.user.userId || req.user.sub;
+    this.logger.log(`Admin ${adminId} intercepting shipment: ${id}`);
+
+    try {
+      const result = await this.shipmentsService.interceptShipment(id, body.reason.trim(), adminId);
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to intercept shipment ${id}: ${error.message}`, error.stack);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Failed to intercept shipment',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/clear')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async clearShipment(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: { reason: string },
+  ) {
+    this.validateAuth(req, `POST /shipments/${id}/clear`);
+
+    if (!id || id.trim() === '') {
+      throw new BadRequestException('Shipment ID is required');
+    }
+    if (!body?.reason || typeof body.reason !== 'string' || body.reason.trim() === '') {
+      throw new BadRequestException('Clear reason is required');
+    }
+
+    const adminId = req.user.userId || req.user.sub;
+    this.logger.log(`Admin ${adminId} clearing shipment: ${id}`);
+
+    try {
+      const result = await this.shipmentsService.clearShipment(id, body.reason.trim(), adminId);
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to clear shipment ${id}: ${error.message}`, error.stack);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Failed to clear shipment',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

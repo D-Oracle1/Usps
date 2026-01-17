@@ -1,14 +1,16 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { io, Socket } from 'socket.io-client'
 import api from '@/lib/api'
 import type { Shipment, TrackingEvent } from '@/lib/types'
-import { ArrowLeft, MapPin, Truck, Clock, Navigation, Package, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, User, Phone, Mail, FileText, Scale, DollarSign, Ruler, Calendar } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, Clock, Navigation, Package, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, User, Phone, Mail, FileText, Scale, DollarSign, Ruler, Calendar, X } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import dynamic from 'next/dynamic'
+import { useTimeBasedShipmentMovement, type MovementState } from '@/app/hooks/useTimeBasedShipmentMovement'
+import { haversineDistance } from '@/app/utils/bearing'
 
 // Dynamically import Leaflet components
 const MapContainer = dynamic(
@@ -38,15 +40,13 @@ export default function PublicTrackingMapPage() {
   const trackingNumber = params.trackingNumber as string
 
   const socket = useRef<Socket | null>(null)
-  const animationRef = useRef<number | null>(null)
-  const targetPositionRef = useRef<[number, number]>([39.8283, -98.5795])
 
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [events, setEvents] = useState<TrackingEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [position, setPosition] = useState<[number, number]>([39.8283, -98.5795])
   const [animatedPosition, setAnimatedPosition] = useState<[number, number]>([39.8283, -98.5795])
+  const [bearing, setBearing] = useState(0)
   const [originPosition, setOriginPosition] = useState<[number, number] | null>(null)
   const [destPosition, setDestPosition] = useState<[number, number] | null>(null)
   const [route, setRoute] = useState<Array<[number, number]>>([])
@@ -54,60 +54,69 @@ export default function PublicTrackingMapPage() {
   const [speed, setSpeed] = useState(0)
   const [progress, setProgress] = useState(0)
   const [mapReady, setMapReady] = useState(false)
+  const [movementReady, setMovementReady] = useState(false)
+  const [initialProgress, setInitialProgress] = useState(0)
+  const [tripDurationMs, setTripDurationMs] = useState(60000) // Default 1 minute for demo
 
   // Interception state
   const [isIntercepted, setIsIntercepted] = useState(false)
   const [interceptReason, setInterceptReason] = useState<string | null>(null)
   const [interceptedAt, setInterceptedAt] = useState<string | null>(null)
+  const [interceptLocation, setInterceptLocation] = useState<{ latitude: number | null; longitude: number | null; address: string | null } | null>(null)
   const [clearReason, setClearReason] = useState<string | null>(null)
+  const [showInterceptNotification, setShowInterceptNotification] = useState(true)
+  const [showClearNotification, setShowClearNotification] = useState(false)
 
-  // Smooth position interpolation with improved stability
-  const animateToPosition = useCallback((targetLat: number, targetLng: number) => {
-    targetPositionRef.current = [targetLat, targetLng]
+  // Average speed for demo purposes (km/h) - adjust for faster/slower demo
+  const DEMO_SPEED_KMH = 80
 
-    // Cancel any existing animation
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current)
-      animationRef.current = null
-    }
-
-    let lastTime = performance.now()
-
-    const animate = (currentTime: number) => {
-      // Throttle to ~30fps for stability
-      const deltaTime = currentTime - lastTime
-      if (deltaTime < 33) {
-        animationRef.current = requestAnimationFrame(animate)
-        return
-      }
-      lastTime = currentTime
-
-      setAnimatedPosition(current => {
-        const [currentLat, currentLng] = current
-        const [tLat, tLng] = targetPositionRef.current
-
-        const diffLat = tLat - currentLat
-        const diffLng = tLng - currentLng
-
-        // Use smaller factor for smoother, more stable animation
-        const factor = 0.08
-
-        // Check if we're close enough to snap to target
-        if (Math.abs(diffLat) < 0.00001 && Math.abs(diffLng) < 0.00001) {
-          return [tLat, tLng]
-        }
-
-        return [
-          currentLat + diffLat * factor,
-          currentLng + diffLng * factor
-        ]
-      })
-
-      animationRef.current = requestAnimationFrame(animate)
-    }
-
-    animationRef.current = requestAnimationFrame(animate)
+  // Movement state callback - updates position imperatively
+  const handlePositionUpdate = useCallback((state: MovementState) => {
+    setAnimatedPosition([state.position.lat, state.position.lng])
+    setBearing(state.bearing)
+    setProgress(state.progress * 100)
+    setSpeed(state.speed)
   }, [])
+
+  // Handle arrival
+  const handleArrival = useCallback(() => {
+    setIsMoving(false)
+    setShipment(prev => prev ? { ...prev, currentStatus: 'DELIVERED' } : null)
+  }, [])
+
+  // Convert route to LatLng format for the hook
+  const routeLatLng = useMemo(() => {
+    return route.map(([lat, lng]) => ({ lat, lng }))
+  }, [route])
+
+  // Movement hook configuration
+  const movementConfig = useMemo(() => {
+    if (!originPosition || !destPosition || !movementReady) return null
+
+    return {
+      origin: { lat: originPosition[0], lng: originPosition[1] },
+      destination: { lat: destPosition[0], lng: destPosition[1] },
+      route: routeLatLng.length > 1 ? routeLatLng : undefined,
+      durationMs: tripDurationMs,
+      averageSpeedKmh: DEMO_SPEED_KMH,
+      initialProgress: initialProgress,
+      startPaused: !isMoving || isIntercepted,
+      onPositionUpdate: handlePositionUpdate,
+      onArrival: handleArrival,
+    }
+  }, [originPosition, destPosition, routeLatLng, tripDurationMs, initialProgress, isMoving, isIntercepted, handlePositionUpdate, handleArrival, movementReady])
+
+  // Use the time-based movement hook
+  const movement = useTimeBasedShipmentMovement(
+    movementConfig || {
+      origin: { lat: 39.8283, lng: -98.5795 },
+      destination: { lat: 39.8283, lng: -98.5795 },
+      durationMs: 60000,
+      averageSpeedKmh: DEMO_SPEED_KMH,
+      startPaused: true,
+      onPositionUpdate: handlePositionUpdate,
+    }
+  )
 
   // Load shipment data
   useEffect(() => {
@@ -121,37 +130,70 @@ export default function PublicTrackingMapPage() {
 
         setShipment(shipmentData)
         setEvents(eventsData || [])
-        setIsMoving(shipmentData.movementState?.isMoving ?? false)
+
+        // Check if shipment is in transit and not intercepted
+        const shouldMove = shipmentData.currentStatus === 'IN_TRANSIT' &&
+                          (shipmentData.movementState?.isMoving ?? true)
+        const isCurrentlyIntercepted = shipmentData.movementState?.pausedBy != null
+
+        setIsMoving(shouldMove && !isCurrentlyIntercepted)
+        setIsIntercepted(isCurrentlyIntercepted)
+
+        if (isCurrentlyIntercepted) {
+          setInterceptReason(shipmentData.movementState?.interceptReason || null)
+          setInterceptLocation({
+            latitude: shipmentData.movementState?.interceptedLat || null,
+            longitude: shipmentData.movementState?.interceptedLng || null,
+            address: shipmentData.movementState?.interceptedAddress || null,
+          })
+        }
 
         // Try to get route info
         try {
-          // Use a simulated route based on locations
+          // Get coordinates for origin and destination
           const originCoords = getCityCoordinates(shipmentData.originLocation)
           const destCoords = getCityCoordinates(shipmentData.destinationLocation)
 
           setOriginPosition([originCoords.lat, originCoords.lng])
           setDestPosition([destCoords.lat, destCoords.lng])
 
-          // Generate a simple route
-          const routePoints: Array<[number, number]> = []
-          for (let i = 0; i <= 10; i++) {
-            const t = i / 10
-            routePoints.push([
-              originCoords.lat + (destCoords.lat - originCoords.lat) * t,
-              originCoords.lng + (destCoords.lng - originCoords.lng) * t
-            ])
-          }
+          // Fetch actual road route from OSRM
+          const routePoints = await fetchRoute(originCoords, destCoords)
           setRoute(routePoints)
 
-          // Set initial position
+          // Calculate route distance for trip duration
+          let totalDistance = 0
+          for (let i = 0; i < routePoints.length - 1; i++) {
+            totalDistance += haversineDistance(
+              { lat: routePoints[i][0], lng: routePoints[i][1] },
+              { lat: routePoints[i + 1][0], lng: routePoints[i + 1][1] }
+            )
+          }
+
+          // Calculate trip duration (distance / speed * 1000 for ms)
+          // For demo, use a scaled duration (1 minute per 100km)
+          const demoDurationMs = Math.max(30000, (totalDistance / 100) * 60000)
+          setTripDurationMs(demoDurationMs)
+
+          // Set initial position and progress
           if (shipmentData.currentLocation && shipmentData.currentLocation.includes(',')) {
             const [lat, lng] = shipmentData.currentLocation.split(',').map(Number)
-            setPosition([lat, lng])
             setAnimatedPosition([lat, lng])
+
+            // Calculate current progress along route
+            const originDist = haversineDistance(
+              { lat: originCoords.lat, lng: originCoords.lng },
+              { lat, lng }
+            )
+            const currentProgress = Math.min(0.95, originDist / totalDistance)
+            setInitialProgress(currentProgress)
           } else {
-            setPosition([originCoords.lat, originCoords.lng])
             setAnimatedPosition([originCoords.lat, originCoords.lng])
+            setInitialProgress(0)
           }
+
+          // Enable movement animation after setup is complete
+          setMovementReady(true)
         } catch (err) {
           console.error('Failed to load route:', err)
         }
@@ -165,12 +207,6 @@ export default function PublicTrackingMapPage() {
     }
 
     loadShipment()
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current)
-      }
-    }
   }, [trackingNumber])
 
   // WebSocket connection for real-time updates
@@ -190,28 +226,29 @@ export default function PublicTrackingMapPage() {
     })
 
     socket.current.on('joinedShipment', (data) => {
-      setIsMoving(data.isMoving)
+      const shouldMove = data.isMoving && !data.isIntercepted
+      setIsMoving(shouldMove)
       setIsIntercepted(data.isIntercepted || false)
       setInterceptReason(data.interceptReason || null)
       setInterceptedAt(data.interceptedAt || null)
+      setInterceptLocation(data.interceptLocation || null)
       setClearReason(data.clearReason || null)
-      if (data.currentLocation) {
-        const lat = data.currentLocation.latitude
-        const lng = data.currentLocation.longitude
-        setPosition([lat, lng])
-        animateToPosition(lat, lng)
+
+      // If intercepted and we have intercept location, freeze there
+      if (data.isIntercepted && data.interceptLocation?.latitude && data.interceptLocation?.longitude) {
+        const lat = data.interceptLocation.latitude
+        const lng = data.interceptLocation.longitude
+        setAnimatedPosition([lat, lng])
+        // Seek the movement to this position
+        if (movement) {
+          const currentState = movement.getState()
+          setInitialProgress(currentState.progress)
+        }
       }
     })
 
     socket.current.on('locationUpdate', (data) => {
-      const lat = data.latitude
-      const lng = data.longitude
-      animateToPosition(lat, lng)
-      setPosition([lat, lng])
-      if (data.speed) setSpeed(data.speed)
-      if (data.progress) setProgress(data.progress.percentComplete)
-
-      // Update shipment with real-time ETA and distance from admin location changes
+      // Location updates from server - update shipment data but let local animation handle position
       if (data.remainingDistance !== undefined || data.estimatedArrival || data.eta || data.distance) {
         setShipment(prev => {
           if (!prev) return prev
@@ -226,17 +263,31 @@ export default function PublicTrackingMapPage() {
     })
 
     socket.current.on('shipmentIntercepted', (data) => {
+      // Pause movement - the hook will freeze at current position
       setIsMoving(false)
       setIsIntercepted(true)
-      setInterceptReason(data.reason || 'Shipment intercepted')
+      setInterceptReason(data.reason || 'Shipment held for inspection')
       setInterceptedAt(data.timestamp || new Date().toISOString())
+      setShowInterceptNotification(true)
+
+      // Store intercept location for display
+      if (data.location) {
+        setInterceptLocation(data.location)
+        // Set the animated position to the intercept location
+        if (data.location.latitude && data.location.longitude) {
+          setAnimatedPosition([data.location.latitude, data.location.longitude])
+        }
+      }
     })
 
     socket.current.on('shipmentCleared', (data) => {
+      // Resume movement from current position
       setIsMoving(true)
       setIsIntercepted(false)
-      setClearReason(data.reason || 'Shipment cleared')
+      setClearReason(data.reason || 'Shipment cleared and in transit')
       setInterceptReason(null)
+      setInterceptLocation(null)
+      setShowClearNotification(true)
     })
 
     socket.current.on('shipmentPaused', () => setIsMoving(false))
@@ -251,7 +302,27 @@ export default function PublicTrackingMapPage() {
       socket.current?.emit('leaveShipment', { shipmentId: shipment.id })
       socket.current?.disconnect()
     }
-  }, [shipment, animateToPosition])
+  }, [shipment, movement])
+
+  // Auto-hide interception notification after 60 seconds
+  useEffect(() => {
+    if (isIntercepted && showInterceptNotification) {
+      const timer = setTimeout(() => {
+        setShowInterceptNotification(false)
+      }, 60000) // 60 seconds
+      return () => clearTimeout(timer)
+    }
+  }, [isIntercepted, showInterceptNotification])
+
+  // Auto-hide clear notification after 10 seconds
+  useEffect(() => {
+    if (showClearNotification) {
+      const timer = setTimeout(() => {
+        setShowClearNotification(false)
+      }, 10000) // 10 seconds
+      return () => clearTimeout(timer)
+    }
+  }, [showClearNotification])
 
   // Helper to get city coordinates
   const getCityCoordinates = (location: string): { lat: number; lng: number } => {
@@ -272,6 +343,41 @@ export default function PublicTrackingMapPage() {
       'boston': { lat: 42.3601, lng: -71.0589 },
       'miami': { lat: 25.7617, lng: -80.1918 },
       'atlanta': { lat: 33.7490, lng: -84.3880 },
+      'washington': { lat: 38.9072, lng: -77.0369 },
+      'detroit': { lat: 42.3314, lng: -83.0458 },
+      'minneapolis': { lat: 44.9778, lng: -93.2650 },
+      'portland': { lat: 45.5152, lng: -122.6784 },
+      'las vegas': { lat: 36.1699, lng: -115.1398 },
+      'nashville': { lat: 36.1627, lng: -86.7816 },
+      'memphis': { lat: 35.1495, lng: -90.0490 },
+      'baltimore': { lat: 39.2904, lng: -76.6122 },
+      'milwaukee': { lat: 43.0389, lng: -87.9065 },
+      'albuquerque': { lat: 35.0844, lng: -106.6504 },
+      'tucson': { lat: 32.2226, lng: -110.9747 },
+      'fresno': { lat: 36.7378, lng: -119.7871 },
+      'sacramento': { lat: 38.5816, lng: -121.4944 },
+      'kansas city': { lat: 39.0997, lng: -94.5786 },
+      'mesa': { lat: 33.4152, lng: -111.8315 },
+      'omaha': { lat: 41.2565, lng: -95.9345 },
+      'cleveland': { lat: 41.4993, lng: -81.6944 },
+      'virginia beach': { lat: 36.8529, lng: -75.9780 },
+      'raleigh': { lat: 35.7796, lng: -78.6382 },
+      'colorado springs': { lat: 38.8339, lng: -104.8214 },
+      'long beach': { lat: 33.7701, lng: -118.1937 },
+      'oakland': { lat: 37.8044, lng: -122.2712 },
+      'new orleans': { lat: 29.9511, lng: -90.0715 },
+      'tampa': { lat: 27.9506, lng: -82.4572 },
+      'orlando': { lat: 28.5383, lng: -81.3792 },
+      'st. louis': { lat: 38.6270, lng: -90.1994 },
+      'pittsburgh': { lat: 40.4406, lng: -79.9959 },
+      'cincinnati': { lat: 39.1031, lng: -84.5120 },
+      'indianapolis': { lat: 39.7684, lng: -86.1581 },
+      'charlotte': { lat: 35.2271, lng: -80.8431 },
+      'san jose': { lat: 37.3382, lng: -121.8863 },
+      'jacksonville': { lat: 30.3322, lng: -81.6557 },
+      'columbus': { lat: 39.9612, lng: -82.9988 },
+      'fort worth': { lat: 32.7555, lng: -97.3308 },
+      'el paso': { lat: 31.7619, lng: -106.4850 },
     }
 
     const normalized = location.toLowerCase()
@@ -281,6 +387,35 @@ export default function PublicTrackingMapPage() {
       }
     }
     return { lat: 39.8283, lng: -98.5795 }
+  }
+
+  // Fetch actual road route from OSRM
+  const fetchRoute = async (origin: { lat: number; lng: number }, dest: { lat: number; lng: number }): Promise<Array<[number, number]>> => {
+    try {
+      // OSRM expects coordinates as lng,lat
+      const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson`
+      const response = await fetch(url)
+      const data = await response.json()
+
+      if (data.code === 'Ok' && data.routes && data.routes[0]) {
+        // OSRM returns coordinates as [lng, lat], we need [lat, lng] for Leaflet
+        const coordinates = data.routes[0].geometry.coordinates
+        return coordinates.map((coord: [number, number]) => [coord[1], coord[0]] as [number, number])
+      }
+    } catch (error) {
+      console.error('Failed to fetch route from OSRM:', error)
+    }
+
+    // Fallback to straight line if routing fails
+    const routePoints: Array<[number, number]> = []
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10
+      routePoints.push([
+        origin.lat + (dest.lat - origin.lat) * t,
+        origin.lng + (dest.lng - origin.lng) * t
+      ])
+    }
+    return routePoints
   }
 
   const getStatusColor = (status: string) => {
@@ -340,11 +475,24 @@ export default function PublicTrackingMapPage() {
 
     function MapController() {
       const map = MapHook ? MapHook() : null
+      const lastPanRef = useRef<[number, number] | null>(null)
+
       useEffect(() => {
         if (map && animatedPosition) {
-          map.panTo(animatedPosition, { animate: true, duration: 0.5 })
+          // Only pan if we've moved significantly (reduces jitter)
+          const lastPan = lastPanRef.current
+          if (lastPan) {
+            const latDiff = Math.abs(animatedPosition[0] - lastPan[0])
+            const lngDiff = Math.abs(animatedPosition[1] - lastPan[1])
+            // Only pan if moved more than ~100 meters
+            if (latDiff < 0.001 && lngDiff < 0.001) {
+              return
+            }
+          }
+          lastPanRef.current = animatedPosition
+          map.panTo(animatedPosition, { animate: true, duration: 0.8, easeLinearity: 0.5 })
         }
-      }, [map])
+      }, [map, animatedPosition])
       return null
     }
 
@@ -421,7 +569,7 @@ export default function PublicTrackingMapPage() {
       <div className="h-[60vh] relative">
         {mapReady && (
           <MapContainer
-            center={position}
+            center={animatedPosition}
             zoom={6}
             style={{ height: '100%', width: '100%' }}
             scrollWheelZoom={true}
@@ -441,10 +589,16 @@ export default function PublicTrackingMapPage() {
             <span className={`font-medium ${isIntercepted ? 'text-red-700' : 'text-gray-900'}`}>
               {shipment.currentStatus === 'DELIVERED' ? 'Delivered' :
                shipment.currentStatus === 'PENDING' ? 'Pending Pickup' :
-               isIntercepted ? 'INTERCEPTED' :
+               isIntercepted ? 'Held for Inspection' :
                isMoving ? 'In Transit' : 'Processing'}
             </span>
           </div>
+          {isIntercepted && interceptLocation?.address && (
+            <div className="text-xs text-gray-600 mt-1">
+              <MapPin className="w-3 h-3 inline mr-1" />
+              {interceptLocation.address}
+            </div>
+          )}
           {isMoving && speed > 0 && !isIntercepted && (
             <div className="flex items-center text-sm text-gray-600">
               <Navigation className="w-4 h-4 mr-1" />
@@ -462,15 +616,21 @@ export default function PublicTrackingMapPage() {
         </div>
 
         {/* Interception Alert Banner */}
-        {isIntercepted && (
-          <div className="absolute top-4 left-4 right-[240px] bg-red-600 text-white rounded-lg shadow-lg p-4 z-[1000]">
+        {isIntercepted && showInterceptNotification && (
+          <div className="absolute top-4 left-4 right-[240px] bg-red-600 text-white rounded-lg shadow-lg p-4 z-[1000] animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-6 h-6 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h3 className="font-bold text-lg">Shipment Intercepted</h3>
+                <h3 className="font-bold text-lg">Shipment Held for Inspection</h3>
                 <p className="text-red-100 text-sm mt-1">
                   Your shipment has been temporarily held for inspection or verification.
                 </p>
+                {interceptLocation?.address && (
+                  <div className="mt-2 p-2 bg-red-700/50 rounded">
+                    <p className="text-xs text-red-200 font-medium">Location:</p>
+                    <p className="text-sm">{interceptLocation.address}</p>
+                  </div>
+                )}
                 {interceptReason && (
                   <div className="mt-2 p-2 bg-red-700/50 rounded">
                     <p className="text-xs text-red-200 font-medium">Reason:</p>
@@ -478,22 +638,36 @@ export default function PublicTrackingMapPage() {
                   </div>
                 )}
                 <p className="text-xs text-red-200 mt-2">
-                  Movement will resume once the goods are cleared.
+                  Movement will resume once the inspection is complete.
                 </p>
               </div>
+              <button
+                onClick={() => setShowInterceptNotification(false)}
+                className="text-white/70 hover:text-white p-1"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
 
         {/* Clear Notification (shows briefly when goods are cleared) */}
-        {clearReason && !isIntercepted && isMoving && (
-          <div className="absolute top-4 left-4 right-[240px] bg-emerald-600 text-white rounded-lg shadow-lg p-3 z-[1000]">
+        {showClearNotification && !isIntercepted && isMoving && (
+          <div className="absolute top-4 left-4 right-[240px] bg-emerald-600 text-white rounded-lg shadow-lg p-3 z-[1000] animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 flex-shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="font-medium text-sm">Shipment Cleared - Movement Resumed</p>
                 <p className="text-emerald-100 text-xs">{clearReason}</p>
               </div>
+              <button
+                onClick={() => setShowClearNotification(false)}
+                className="text-white/70 hover:text-white p-1"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}

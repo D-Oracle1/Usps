@@ -140,7 +140,12 @@ export class TrackingGateway
         isIntercepted: shipment.movementState ? !shipment.movementState.isMoving : false,
         interceptReason: shipment.movementState?.interceptReason || null,
         interceptedAt: shipment.movementState?.pausedAt || null,
-        interceptedBy: shipment.movementState?.pausedByAdmin || null,
+        // Don't expose admin info - provide intercept address instead
+        interceptLocation: shipment.movementState ? {
+          latitude: (shipment.movementState as any).interceptedLat || null,
+          longitude: (shipment.movementState as any).interceptedLng || null,
+          address: (shipment.movementState as any).interceptedAddress || null,
+        } : null,
         clearReason: shipment.movementState?.clearReason || null,
         currentLocation: latestLocation || null,
         shipment,
@@ -230,14 +235,20 @@ export class TrackingGateway
     });
   }
 
-  emitPauseEvent(shipmentId: string, reason?: string, admin?: { id: string; name: string; email: string } | null) {
+  emitPauseEvent(
+    shipmentId: string,
+    reason?: string,
+    admin?: { id: string; name: string; email: string } | null,
+    interceptLocation?: { latitude: number | null; longitude: number | null; address: string | null }
+  ) {
     const room = `shipment:${shipmentId}`;
     this.server.to(room).emit('shipmentIntercepted', {
       shipmentId,
       status: 'INTERCEPTED',
-      reason: reason || 'Shipment intercepted',
-      interceptedBy: admin ? { name: admin.name, email: admin.email } : null,
+      reason: reason || 'Shipment held for inspection',
+      // Don't expose admin info to public - privacy
       timestamp: new Date(),
+      location: interceptLocation || null,
     });
 
     // Pause the simulation if running and track pause time
@@ -247,7 +258,7 @@ export class TrackingGateway
       simulation.pausedAt = Date.now();
     }
 
-    this.logger.log(`Emitted intercept event for shipment: ${shipmentId}, reason: ${reason}`);
+    this.logger.log(`Emitted intercept event for shipment: ${shipmentId}, reason: ${reason}, location: ${interceptLocation?.address}`);
   }
 
   emitResumeEvent(shipmentId: string, reason?: string, admin?: { id: string; name: string; email: string } | null) {
@@ -255,8 +266,8 @@ export class TrackingGateway
     this.server.to(room).emit('shipmentCleared', {
       shipmentId,
       status: 'CLEARED',
-      reason: reason || 'Shipment cleared',
-      clearedBy: admin ? { name: admin.name, email: admin.email } : null,
+      reason: reason || 'Shipment cleared and in transit',
+      // Don't expose admin info to public - privacy
       timestamp: new Date(),
     });
 

@@ -150,6 +150,56 @@ export class MovementService {
     private pricingService: PricingService,
   ) {}
 
+  // Reverse geocode coordinates to get street/area name using Nominatim
+  private async reverseGeocode(lat: number, lng: number): Promise<string> {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'USPS-Tracking-System/1.0',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Geocoding request failed');
+      }
+
+      const data = await response.json();
+
+      if (data && data.address) {
+        // Build a human-readable address from parts
+        const parts: string[] = [];
+
+        if (data.address.road) parts.push(data.address.road);
+        if (data.address.suburb || data.address.neighbourhood) {
+          parts.push(data.address.suburb || data.address.neighbourhood);
+        }
+        if (data.address.city || data.address.town || data.address.village) {
+          parts.push(data.address.city || data.address.town || data.address.village);
+        }
+        if (data.address.state) parts.push(data.address.state);
+
+        if (parts.length > 0) {
+          return parts.join(', ');
+        }
+
+        // Fallback to display_name
+        if (data.display_name) {
+          // Take first 2-3 parts of display name
+          const displayParts = data.display_name.split(', ').slice(0, 3);
+          return displayParts.join(', ');
+        }
+      }
+
+      return `Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    } catch (error) {
+      console.error('Reverse geocoding failed:', error);
+      return `Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
+  }
+
   // Calculate distance between two points using Haversine formula
   private calculateHaversineDistance(
     lat1: number,
@@ -361,6 +411,40 @@ export class MovementService {
       throw new BadRequestException('Shipment is already intercepted');
     }
 
+    // Get the current location from the tracking gateway simulation or database
+    const currentLocation = await this.prisma.shipmentLocation.findFirst({
+      where: { shipmentId },
+      orderBy: { recordedAt: 'desc' },
+    });
+
+    // Get coordinates and reverse geocode
+    let interceptLat: number | null = null;
+    let interceptLng: number | null = null;
+    let interceptAddress: string | null = null;
+
+    if (currentLocation) {
+      interceptLat = currentLocation.latitude;
+      interceptLng = currentLocation.longitude;
+      interceptAddress = await this.reverseGeocode(interceptLat, interceptLng);
+    } else if (shipment.currentLocation && shipment.currentLocation.includes(',')) {
+      // Try to parse from currentLocation string
+      const parts = shipment.currentLocation.split(',').map(s => parseFloat(s.trim()));
+      if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        interceptLat = parts[0];
+        interceptLng = parts[1];
+        interceptAddress = await this.reverseGeocode(interceptLat, interceptLng);
+      }
+    }
+
+    // Update shipment status to INTERCEPTED and store the intercept location
+    await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: {
+        currentStatus: 'INTERCEPTED',
+        currentLocation: interceptAddress || shipment.currentLocation || 'Unknown',
+      },
+    });
+
     const movementState = await this.prisma.shipmentMovementState.update({
       where: { shipmentId },
       data: {
@@ -368,7 +452,10 @@ export class MovementService {
         pausedBy: adminId,
         pausedAt: new Date(),
         interceptReason: reason,
-        clearReason: null, // Reset clear reason when intercepted
+        clearReason: null,
+        interceptedLat: interceptLat,
+        interceptedLng: interceptLng,
+        interceptedAddress: interceptAddress,
       },
       include: {
         pausedByAdmin: {
@@ -381,23 +468,34 @@ export class MovementService {
       },
     });
 
+    // Create tracking event with the address (not coordinates) - no admin info in description
     await this.prisma.trackingEvent.create({
       data: {
         shipmentId,
         status: 'INTERCEPTED',
-        description: `Shipment intercepted: ${reason}`,
-        location: shipment.currentLocation || 'Unknown',
+        description: `Shipment held for inspection: ${reason}`,
+        location: interceptAddress || shipment.currentLocation || 'Unknown',
         eventTime: new Date(),
         createdBy: adminId,
       },
     });
 
-    this.trackingGateway.emitPauseEvent(shipmentId, reason, movementState.pausedByAdmin);
+    // Emit pause event with intercept location - no admin info for public display
+    this.trackingGateway.emitPauseEvent(shipmentId, reason, null, {
+      latitude: interceptLat,
+      longitude: interceptLng,
+      address: interceptAddress,
+    });
 
     return {
       message: 'Shipment intercepted successfully',
       reason,
       movementState,
+      interceptLocation: {
+        latitude: interceptLat,
+        longitude: interceptLng,
+        address: interceptAddress,
+      },
     };
   }
 
@@ -421,33 +519,39 @@ export class MovementService {
       throw new BadRequestException('Shipment is already moving');
     }
 
+    // Update shipment status to IN_TRANSIT
+    await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: { currentStatus: 'IN_TRANSIT' },
+    });
+
     const movementState = await this.prisma.shipmentMovementState.update({
       where: { shipmentId },
       data: {
         isMoving: true,
         resumedAt: new Date(),
         clearReason: reason,
+        // Clear intercept location when resumed
+        interceptedLat: null,
+        interceptedLng: null,
+        interceptedAddress: null,
       },
     });
 
-    // Get admin info for the event
-    const admin = await this.prisma.adminUser.findUnique({
-      where: { id: adminId },
-      select: { id: true, name: true, email: true },
-    });
-
+    // Create tracking event without admin reference in public-facing text
     await this.prisma.trackingEvent.create({
       data: {
         shipmentId,
-        status: 'CLEARED',
-        description: `Shipment cleared: ${reason}`,
+        status: 'IN_TRANSIT',
+        description: `Shipment cleared and in transit: ${reason}`,
         location: shipment.currentLocation || 'Unknown',
         eventTime: new Date(),
         createdBy: adminId,
       },
     });
 
-    this.trackingGateway.emitResumeEvent(shipmentId, reason, admin);
+    // Emit resume event without admin info for public display
+    this.trackingGateway.emitResumeEvent(shipmentId, reason, null);
 
     return {
       message: 'Shipment cleared successfully',
@@ -771,10 +875,13 @@ export class MovementService {
     const hoursRemaining = newRemainingDistance / avgSpeed;
     const newEta = new Date(Date.now() + hoursRemaining * 60 * 60 * 1000);
 
-    // Build location string
-    const locationString = addressLabel
-      ? `${addressLabel} (${latitude.toFixed(5)},${longitude.toFixed(5)})`
-      : `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
+    // Get address from reverse geocoding if not provided
+    let locationString: string;
+    if (addressLabel) {
+      locationString = addressLabel;
+    } else {
+      locationString = await this.reverseGeocode(latitude, longitude);
+    }
 
     // Record new location
     await this.prisma.shipmentLocation.create({
@@ -797,12 +904,12 @@ export class MovementService {
       },
     });
 
-    // Create tracking event for manual location update
+    // Create tracking event - no admin reference in public text
     await this.prisma.trackingEvent.create({
       data: {
         shipmentId,
         status: 'LOCATION_UPDATED',
-        description: `Location manually updated by admin`,
+        description: `Shipment in transit`,
         location: locationString,
         eventTime: new Date(),
         createdBy: adminId,

@@ -1,18 +1,45 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { MessageCircle, X, Minimize2, Maximize2, LogOut } from 'lucide-react'
 import { useSupportAuth } from '@/lib/support-auth-context'
+import { useAuth } from '@/lib/auth-context'
 import { getSupportSocket } from '@/lib/support-socket'
 import ChatAuthModal from './ChatAuthModal'
 import ChatWindow from './ChatWindow'
 
 export default function ChatWidget() {
-  const { user, logout, isLoading, token } = useSupportAuth()
+  const { user, logout, isLoading, token, autoLinkFromMainAuth } = useSupportAuth()
+  const { user: mainUser } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [isAutoLinking, setIsAutoLinking] = useState(false)
+  const hasAttemptedAutoLink = useRef(false)
+
+  // Auto-link support account when main user is logged in but support is not
+  useEffect(() => {
+    const tryAutoLink = async () => {
+      // Only try once per session and when conditions are right
+      if (
+        hasAttemptedAutoLink.current ||
+        isLoading ||
+        user ||
+        !mainUser ||
+        isAutoLinking
+      ) {
+        return
+      }
+
+      hasAttemptedAutoLink.current = true
+      setIsAutoLinking(true)
+      await autoLinkFromMainAuth()
+      setIsAutoLinking(false)
+    }
+
+    tryAutoLink()
+  }, [mainUser, user, isLoading, isAutoLinking, autoLinkFromMainAuth])
 
   // Reset unread when opening
   useEffect(() => {
@@ -41,9 +68,20 @@ export default function ChatWidget() {
     }
   }, [token, user, isOpen, isMinimized])
 
-  const handleToggle = (e: React.MouseEvent) => {
+  const handleToggle = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!user) {
+      // If main user is logged in, try auto-linking first
+      if (mainUser && !hasAttemptedAutoLink.current) {
+        setIsAutoLinking(true)
+        hasAttemptedAutoLink.current = true
+        const success = await autoLinkFromMainAuth()
+        setIsAutoLinking(false)
+        if (success) {
+          setIsOpen(true)
+          return
+        }
+      }
       setShowAuthModal(true)
     } else {
       setIsOpen(!isOpen)
@@ -56,7 +94,7 @@ export default function ChatWidget() {
   }
 
   // Don't render during initial load
-  if (isLoading) {
+  if (isLoading || isAutoLinking) {
     return null
   }
 
@@ -66,7 +104,7 @@ export default function ChatWidget() {
       {!isOpen && (
         <button
           onClick={handleToggle}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-[#333366] text-white rounded-full shadow-lg hover:bg-[#1a1a4e] hover:scale-105 transition-all flex items-center justify-center z-50 group"
+          className="fixed bottom-6 right-6 w-14 h-14 bg-[#333366] text-white rounded-full shadow-lg hover:bg-[#1a1a4e] hover:scale-105 transition-all flex items-center justify-center z-[9999] group"
           aria-label="Open support chat"
         >
           <MessageCircle className="w-6 h-6" />
@@ -84,7 +122,7 @@ export default function ChatWidget() {
       {/* Chat Window */}
       {isOpen && user && (
         <div
-          className={`fixed bottom-6 right-6 z-50 transition-all duration-200 ${
+          className={`fixed bottom-6 right-6 z-[9999] transition-all duration-200 ${
             isMinimized ? 'w-72' : 'w-96'
           }`}
         >

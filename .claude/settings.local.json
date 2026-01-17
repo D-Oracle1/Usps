@@ -80,7 +80,12 @@
       "Bash(npm.cmd install:*)",
       "Bash(npx.cmd prisma migrate:*)",
       "Bash(npx next:*)",
-      "Bash(./node_modules/.bin/next dev:*)"
+      "Bash(./node_modules/.bin/next dev:*)",
+      "Bash(DEBUG=*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(DATABASE_URL=\"postgresql://user:pass@localhost:5432/db\" npx prisma generate:*)",
+      "Bash(grep:*)",
+      "Bash(DIRECT_URL=\"postgresql://postgres.kcnudftcmxtxmwslcbxm:93rMrdfxgFNbMCW@aws-1-eu-west-3.pooler.supabase.com:5432/postgres\" node:*)"
     ]
   }
 }

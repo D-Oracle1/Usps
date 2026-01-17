@@ -120,6 +120,9 @@ export default function ShipmentDetailPage() {
       DELIVERED: 'bg-emerald-100 text-emerald-700',
       FAILED: 'bg-red-100 text-red-700',
       CANCELLED: 'bg-gray-100 text-gray-700',
+      INTERCEPTED: 'bg-red-100 text-red-700',
+      AT_CLEARANCE: 'bg-orange-100 text-orange-700',
+      CLEARED: 'bg-teal-100 text-teal-700',
     }
     return colors[status] || 'bg-gray-100 text-gray-700'
   }
@@ -462,9 +465,6 @@ export default function ShipmentDetailPage() {
                             <MapPin className="w-4 h-4 mr-1" />
                             {event.location}
                           </div>
-                          {event.admin && (
-                            <p className="text-xs text-gray-400 mt-2">Updated by: {event.admin.name}</p>
-                          )}
                         </div>
                       </div>
                     </div>

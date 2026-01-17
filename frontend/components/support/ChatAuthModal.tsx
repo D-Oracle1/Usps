@@ -43,7 +43,7 @@ export default function ChatAuthModal({ onClose, onSuccess }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"
       onClick={(e) => {
         // Only close if clicking the backdrop, not the modal content
         if (e.target === e.currentTarget) {

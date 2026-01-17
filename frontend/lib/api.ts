@@ -11,17 +11,24 @@ export const api = axios.create({
 
 // Add auth token to requests
 api.interceptors.request.use((config) => {
-  // Check if this is a support endpoint
-  const isSupportEndpoint = config.url?.includes('/support/')
+  // Check if this is a support admin endpoint (requires admin auth)
+  const isSupportAdminEndpoint = config.url?.includes('/support/admin')
+  // Check if this is a support auth linking endpoint (requires main user auth)
+  const isSupportLinkEndpoint = config.url?.includes('/support/auth/auto-create') ||
+                                 config.url?.includes('/support/auth/link-account')
+  // Check if this is a regular support endpoint (for customers)
+  const isSupportEndpoint = config.url?.includes('/support/') &&
+                            !isSupportAdminEndpoint &&
+                            !isSupportLinkEndpoint
 
   if (isSupportEndpoint) {
-    // Use support auth token for support endpoints
+    // Use support auth token for customer support endpoints
     const supportToken = localStorage.getItem('support_auth_token')
     if (supportToken) {
       config.headers.Authorization = `Bearer ${supportToken}`
     }
   } else {
-    // Use admin auth token for other endpoints
+    // Use admin auth token for admin endpoints, support admin, and linking endpoints
     const token = localStorage.getItem('auth_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`

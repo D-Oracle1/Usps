@@ -69,6 +69,136 @@ const CITY_COORDINATES: Record<string, LatLng> = {
   'nashville': { lat: 36.1627, lng: -86.7816 },
   'memphis': { lat: 35.1495, lng: -90.0490 },
   'new orleans': { lat: 29.9511, lng: -90.0715 },
+  'baltimore': { lat: 39.2904, lng: -76.6122 },
+  'milwaukee': { lat: 43.0389, lng: -87.9065 },
+  'albuquerque': { lat: 35.0844, lng: -106.6504 },
+  'tucson': { lat: 32.2226, lng: -110.9747 },
+  'fresno': { lat: 36.7378, lng: -119.7871 },
+  'sacramento': { lat: 38.5816, lng: -121.4944 },
+  'kansas city': { lat: 39.0997, lng: -94.5786 },
+  'omaha': { lat: 41.2565, lng: -95.9345 },
+  'raleigh': { lat: 35.7796, lng: -78.6382 },
+  'colorado springs': { lat: 38.8339, lng: -104.8214 },
+  'st. louis': { lat: 38.6270, lng: -90.1994 },
+  'cincinnati': { lat: 39.1031, lng: -84.5120 },
+  'san jose': { lat: 37.3382, lng: -121.8863 },
+  'jacksonville': { lat: 30.3322, lng: -81.6557 },
+  'columbus': { lat: 39.9612, lng: -82.9988 },
+  'fort worth': { lat: 32.7555, lng: -97.3308 },
+  'el paso': { lat: 31.7619, lng: -106.4850 },
+}
+
+// Fetch actual road route from OSRM
+async function fetchRouteFromOSRM(origin: LatLng, dest: LatLng): Promise<L.LatLng[]> {
+  try {
+    // OSRM expects coordinates as lng,lat
+    const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson`
+    const response = await fetch(url)
+    const data = await response.json()
+
+    if (data.code === 'Ok' && data.routes && data.routes[0]) {
+      // OSRM returns coordinates as [lng, lat], we need [lat, lng] for Leaflet
+      const coordinates = data.routes[0].geometry.coordinates
+      return coordinates.map((coord: [number, number]) => L.latLng(coord[1], coord[0]))
+    }
+  } catch (error) {
+    console.error('Failed to fetch route from OSRM:', error)
+  }
+
+  // Fallback to straight line if routing fails
+  const points: L.LatLng[] = []
+  const steps = 50
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    points.push(L.latLng(
+      origin.lat + (dest.lat - origin.lat) * t,
+      origin.lng + (dest.lng - origin.lng) * t
+    ))
+  }
+  return points
+}
+
+// Find the nearest point on a polyline to a given point
+function findNearestPointOnRoute(
+  point: L.LatLng,
+  route: L.LatLng[]
+): { point: L.LatLng; index: number; progress: number } {
+  if (route.length === 0) {
+    return { point, index: 0, progress: 0 }
+  }
+
+  if (route.length === 1) {
+    return { point: route[0], index: 0, progress: 0 }
+  }
+
+  let nearestPoint = route[0]
+  let nearestDistance = Infinity
+  let nearestIndex = 0
+  let nearestProgress = 0
+
+  // Calculate total route length for progress calculation
+  let totalLength = 0
+  const segmentLengths: number[] = []
+  for (let i = 0; i < route.length - 1; i++) {
+    const segmentLength = route[i].distanceTo(route[i + 1])
+    segmentLengths.push(segmentLength)
+    totalLength += segmentLength
+  }
+
+  let cumulativeLength = 0
+
+  // Check each segment of the route
+  for (let i = 0; i < route.length - 1; i++) {
+    const segmentStart = route[i]
+    const segmentEnd = route[i + 1]
+
+    // Find nearest point on this segment
+    const nearest = nearestPointOnSegment(point, segmentStart, segmentEnd)
+    const distance = point.distanceTo(nearest)
+
+    if (distance < nearestDistance) {
+      nearestDistance = distance
+      nearestPoint = nearest
+      nearestIndex = i
+
+      // Calculate progress along the route
+      const distanceAlongSegment = segmentStart.distanceTo(nearest)
+      nearestProgress = (cumulativeLength + distanceAlongSegment) / totalLength
+    }
+
+    cumulativeLength += segmentLengths[i]
+  }
+
+  return {
+    point: nearestPoint,
+    index: nearestIndex,
+    progress: Math.min(1, Math.max(0, nearestProgress))
+  }
+}
+
+// Find the nearest point on a line segment
+function nearestPointOnSegment(
+  point: L.LatLng,
+  segmentStart: L.LatLng,
+  segmentEnd: L.LatLng
+): L.LatLng {
+  const dx = segmentEnd.lng - segmentStart.lng
+  const dy = segmentEnd.lat - segmentStart.lat
+
+  if (dx === 0 && dy === 0) {
+    return segmentStart
+  }
+
+  // Calculate the projection of the point onto the line
+  const t = Math.max(0, Math.min(1,
+    ((point.lng - segmentStart.lng) * dx + (point.lat - segmentStart.lat) * dy) /
+    (dx * dx + dy * dy)
+  ))
+
+  return L.latLng(
+    segmentStart.lat + t * dy,
+    segmentStart.lng + t * dx
+  )
 }
 
 function getCityCoordinates(location: string): LatLng {
@@ -164,7 +294,8 @@ function MapContent({
   isPaused,
   showTruck,
   onLocationUpdate,
-  onMarkerRef
+  onMarkerRef,
+  onProgressUpdate
 }: {
   origin: L.LatLng
   destination: L.LatLng
@@ -172,8 +303,9 @@ function MapContent({
   initialPosition: L.LatLng
   isPaused: boolean
   showTruck: boolean
-  onLocationUpdate: (lat: number, lng: number) => void
+  onLocationUpdate: (lat: number, lng: number, progress: number) => void
   onMarkerRef: (marker: L.Marker | null) => void
+  onProgressUpdate?: (progress: number) => void
 }) {
   const map = useMap()
   const hasInitialized = useRef(false)
@@ -188,14 +320,34 @@ function MapContent({
     hasInitialized.current = true
   }, [map, origin, destination])
 
-  // Handle marker drag
+  // Handle marker drag - snap to route
+  const handleDrag = useCallback(() => {
+    const marker = markerRef.current
+    if (marker && routeLine.length > 0) {
+      const pos = marker.getLatLng()
+      // Find nearest point on route
+      const { point: snappedPoint } = findNearestPointOnRoute(pos, routeLine)
+      // Update marker position to snapped point
+      marker.setLatLng(snappedPoint)
+    }
+  }, [routeLine])
+
+  // Handle marker drag end - snap to route and update
   const handleDragEnd = useCallback(() => {
     const marker = markerRef.current
-    if (marker) {
+    if (marker && routeLine.length > 0) {
       const pos = marker.getLatLng()
-      onLocationUpdate(pos.lat, pos.lng)
+      // Find nearest point on route and progress
+      const { point: snappedPoint, progress } = findNearestPointOnRoute(pos, routeLine)
+      // Update marker to snapped position
+      marker.setLatLng(snappedPoint)
+      // Notify parent with snapped coordinates and progress
+      onLocationUpdate(snappedPoint.lat, snappedPoint.lng, progress)
+      if (onProgressUpdate) {
+        onProgressUpdate(progress)
+      }
     }
-  }, [onLocationUpdate])
+  }, [routeLine, onLocationUpdate, onProgressUpdate])
 
   // Store marker ref
   useEffect(() => {
@@ -234,6 +386,7 @@ function MapContent({
             onMarkerRef(ref)
           }}
           eventHandlers={{
+            drag: handleDrag,
             dragend: handleDragEnd,
           }}
         />
@@ -363,6 +516,8 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
   const [isInfoExpanded, setIsInfoExpanded] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [movementState, setMovementState] = useState<MovementState | null>(null)
+  const [routeLine, setRouteLine] = useState<L.LatLng[]>([])
+  const [isRouteLoading, setIsRouteLoading] = useState(true)
 
   // Marker ref for imperative updates
   const markerRef = useRef<L.Marker | null>(null)
@@ -371,6 +526,17 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
   // Calculate origin and destination coordinates
   const origin = useMemo(() => getCityCoordinates(shipment.originLocation), [shipment.originLocation])
   const destination = useMemo(() => getCityCoordinates(shipment.destinationLocation), [shipment.destinationLocation])
+
+  // Fetch real route on mount
+  useEffect(() => {
+    const loadRoute = async () => {
+      setIsRouteLoading(true)
+      const route = await fetchRouteFromOSRM(origin, destination)
+      setRouteLine(route)
+      setIsRouteLoading(false)
+    }
+    loadRoute()
+  }, [origin, destination])
 
   // Calculate total distance
   const totalDistance = useMemo(() => haversineDistance(origin, destination), [origin, destination])
@@ -426,10 +592,16 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     // Could trigger a status update here
   }, [])
 
-  // Initialize movement hook
+  // Convert routeLine (L.LatLng[]) to LatLng[] for the movement hook
+  const routeAsLatLng = useMemo(() => {
+    return routeLine.map(point => ({ lat: point.lat, lng: point.lng }))
+  }, [routeLine])
+
+  // Initialize movement hook with route for path-following movement
   const movement = useTimeBasedShipmentMovement({
     origin,
     destination,
+    route: routeAsLatLng.length > 1 ? routeAsLatLng : undefined,
     durationMs: tripDuration,
     averageSpeedKmh: averageSpeed,
     initialProgress,
@@ -438,8 +610,8 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     onArrival: handleArrival
   })
 
-  // Handle location update from marker drag
-  const handleLocationUpdate = useCallback(async (lat: number, lng: number) => {
+  // Handle location update from marker drag (with route snapping)
+  const handleLocationUpdate = useCallback(async (lat: number, lng: number, progress: number) => {
     setIsUpdating(true)
     try {
       await api.post(`/movement/${shipment.id}/update-location`, {
@@ -447,10 +619,8 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
         longitude: lng,
       })
 
-      // Calculate new progress and seek to it
-      const distanceFromOrigin = haversineDistance(origin, { lat, lng })
-      const newProgress = Math.min(1, distanceFromOrigin / totalDistance)
-      movement.seekTo(newProgress)
+      // Use the progress from route snapping (more accurate than distance-based)
+      movement.seekTo(progress)
 
       if (onMovementStateChange) {
         onMovementStateChange()
@@ -460,26 +630,12 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     } finally {
       setIsUpdating(false)
     }
-  }, [shipment.id, onMovementStateChange, origin, totalDistance, movement])
+  }, [shipment.id, onMovementStateChange, movement])
 
   // Store marker ref
   const handleMarkerRef = useCallback((marker: L.Marker | null) => {
     markerRef.current = marker
   }, [])
-
-  // Generate route line
-  const routeLine = useMemo(() => {
-    const points: L.LatLng[] = []
-    const steps = 50
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps
-      points.push(L.latLng(
-        origin.lat + (destination.lat - origin.lat) * t,
-        origin.lng + (destination.lng - origin.lng) * t
-      ))
-    }
-    return points
-  }, [origin, destination])
 
   // Calculate center
   const center = useMemo(() => {
@@ -544,7 +700,17 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
         <div className="absolute top-4 right-4 z-[1000] bg-white rounded-lg shadow-lg px-3 py-2">
           <div className="flex items-center space-x-2">
             <GripVertical className="w-4 h-4 text-gray-500" />
-            <span className="text-xs text-gray-600">Drag truck to update location</span>
+            <span className="text-xs text-gray-600">Drag truck along route to update</span>
+          </div>
+        </div>
+      )}
+
+      {/* Route loading indicator */}
+      {isRouteLoading && (
+        <div className="absolute bottom-20 right-4 z-[1000] bg-blue-600 text-white rounded-lg px-3 py-2 shadow-lg">
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-medium">Loading route...</span>
           </div>
         </div>
       )}

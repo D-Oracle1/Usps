@@ -81,6 +81,70 @@ export class SupportAuthService {
     return user;
   }
 
+  async linkFromMainAuth(email: string, name: string) {
+    // Check if support account already exists for this email
+    const existingUser = await this.prisma.supportUser.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      // Update online status and return token
+      await this.prisma.supportUser.update({
+        where: { id: existingUser.id },
+        data: { isOnline: true, lastSeenAt: new Date() },
+      });
+      return {
+        ...this.generateToken(existingUser),
+        isNewAccount: false,
+      };
+    }
+
+    // No support account exists - return status indicating account needs to be created
+    return {
+      exists: false,
+      email,
+      name,
+    };
+  }
+
+  async autoCreateFromMainAuth(email: string, name: string) {
+    // Check if support account already exists for this email
+    const existingUser = await this.prisma.supportUser.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      // Update online status and return token
+      await this.prisma.supportUser.update({
+        where: { id: existingUser.id },
+        data: { isOnline: true, lastSeenAt: new Date() },
+      });
+      return {
+        ...this.generateToken(existingUser),
+        isNewAccount: false,
+      };
+    }
+
+    // Create support account with a random secure password (user can reset if needed)
+    const randomPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
+    const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+    const user = await this.prisma.supportUser.create({
+      data: {
+        name,
+        email,
+        passwordHash: hashedPassword,
+        isOnline: true,
+        lastSeenAt: new Date(),
+      },
+    });
+
+    return {
+      ...this.generateToken(user),
+      isNewAccount: true,
+    };
+  }
+
   private generateToken(user: any) {
     const payload = {
       sub: user.id,

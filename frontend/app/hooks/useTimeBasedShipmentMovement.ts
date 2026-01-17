@@ -31,6 +31,8 @@ export interface MovementState {
 export interface MovementConfig {
   origin: LatLng
   destination: LatLng
+  /** Optional route line to follow (if not provided, moves in straight line) */
+  route?: LatLng[]
   /** Trip duration in milliseconds */
   durationMs: number
   /** Average speed in km/h (for ETA calculations) */
@@ -64,12 +66,52 @@ export interface UseTimeBasedShipmentMovementResult {
   isMoving: () => boolean
 }
 
+// Interpolate position along a route at a given progress (0-1)
+function interpolateAlongRoute(route: LatLng[], progress: number): LatLng {
+  if (route.length === 0) {
+    return { lat: 0, lng: 0 }
+  }
+  if (route.length === 1 || progress <= 0) {
+    return route[0]
+  }
+  if (progress >= 1) {
+    return route[route.length - 1]
+  }
+
+  // Calculate total route length
+  let totalLength = 0
+  const segmentLengths: number[] = []
+  for (let i = 0; i < route.length - 1; i++) {
+    const segmentLength = haversineDistance(route[i], route[i + 1])
+    segmentLengths.push(segmentLength)
+    totalLength += segmentLength
+  }
+
+  // Find the target distance along the route
+  const targetDistance = progress * totalLength
+
+  // Find the segment containing this distance
+  let cumulativeDistance = 0
+  for (let i = 0; i < segmentLengths.length; i++) {
+    const segmentLength = segmentLengths[i]
+    if (cumulativeDistance + segmentLength >= targetDistance) {
+      // Interpolate within this segment
+      const segmentProgress = (targetDistance - cumulativeDistance) / segmentLength
+      return interpolatePosition(route[i], route[i + 1], segmentProgress)
+    }
+    cumulativeDistance += segmentLength
+  }
+
+  return route[route.length - 1]
+}
+
 export function useTimeBasedShipmentMovement(
   config: MovementConfig
 ): UseTimeBasedShipmentMovementResult {
   const {
     origin,
     destination,
+    route,
     durationMs,
     averageSpeedKmh,
     initialProgress = 0,
@@ -81,6 +123,7 @@ export function useTimeBasedShipmentMovement(
   // All animation state is stored in refs to avoid re-renders
   const originRef = useRef<LatLng>(origin)
   const destinationRef = useRef<LatLng>(destination)
+  const routeRef = useRef<LatLng[] | undefined>(route)
   const durationRef = useRef<number>(durationMs)
   const speedRef = useRef<number>(averageSpeedKmh)
 
@@ -90,11 +133,15 @@ export function useTimeBasedShipmentMovement(
   const totalPausedDurationRef = useRef<number>(0)
   const initialProgressRef = useRef<number>(initialProgress)
 
+  // Current progress tracking (updated every frame, used for pause/resume)
+  const currentProgressRef = useRef<number>(initialProgress)
+
   // Animation control refs
   const isRunningRef = useRef<boolean>(false)
   const isPausedRef = useRef<boolean>(startPaused)
   const hasArrivedRef = useRef<boolean>(false)
   const rafIdRef = useRef<number | null>(null)
+  const isInitializedRef = useRef<boolean>(false)
 
   // Callbacks ref (to avoid stale closures)
   const onPositionUpdateRef = useRef(onPositionUpdate)
@@ -109,9 +156,10 @@ export function useTimeBasedShipmentMovement(
   useEffect(() => {
     originRef.current = origin
     destinationRef.current = destination
+    routeRef.current = route
     durationRef.current = durationMs
     speedRef.current = averageSpeedKmh
-  }, [origin, destination, durationMs, averageSpeedKmh])
+  }, [origin, destination, route, durationMs, averageSpeedKmh])
 
   /**
    * Calculate current movement state at a given progress
@@ -121,11 +169,35 @@ export function useTimeBasedShipmentMovement(
 
     const orig = originRef.current
     const dest = destinationRef.current
+    const currentRoute = routeRef.current
     const speed = speedRef.current
 
-    const position = interpolatePosition(orig, dest, progress)
-    const bearing = calculateBearing(position, dest)
-    const totalDistance = haversineDistance(orig, dest)
+    // Use route-based interpolation if route is available, otherwise straight line
+    let position: LatLng
+    let bearing: number
+    let totalDistance: number
+
+    if (currentRoute && currentRoute.length > 1) {
+      // Follow the route
+      position = interpolateAlongRoute(currentRoute, progress)
+
+      // Calculate bearing to next point on route
+      const nextProgress = Math.min(1, progress + 0.01)
+      const nextPosition = interpolateAlongRoute(currentRoute, nextProgress)
+      bearing = calculateBearing(position, nextPosition)
+
+      // Calculate total route distance
+      totalDistance = 0
+      for (let i = 0; i < currentRoute.length - 1; i++) {
+        totalDistance += haversineDistance(currentRoute[i], currentRoute[i + 1])
+      }
+    } else {
+      // Straight line fallback
+      position = interpolatePosition(orig, dest, progress)
+      bearing = calculateBearing(position, dest)
+      totalDistance = haversineDistance(orig, dest)
+    }
+
     const distanceRemaining = totalDistance * (1 - progress)
     const eta = calculateETA(distanceRemaining, speed)
 
@@ -165,6 +237,9 @@ export function useTimeBasedShipmentMovement(
 
     // Map progress: starts from initialProgress, moves to 1
     const currentProgress = Math.min(1, initialProg + baseProgress * (1 - initialProg))
+
+    // Store current progress for pause/resume
+    currentProgressRef.current = currentProgress
 
     // Calculate current state
     const state = calculateState(currentProgress)
@@ -341,12 +416,84 @@ export function useTimeBasedShipmentMovement(
     }
   }, [])
 
-  // Auto-start if not paused
+  // Track previous paused state to detect changes
+  const prevStartPausedRef = useRef<boolean>(startPaused)
+
+  // Initialize on mount - set up initial state based on props
   useEffect(() => {
+    if (isInitializedRef.current) return
+    isInitializedRef.current = true
+
+    // Set initial progress
+    initialProgressRef.current = initialProgress
+    currentProgressRef.current = initialProgress
+
+    // Notify of initial position
+    const state = calculateState(initialProgress)
+    onPositionUpdateRef.current({ ...state, isPaused: startPaused })
+
+    // Auto-start if not paused
     if (!startPaused && !hasArrivedRef.current) {
-      start()
+      isRunningRef.current = true
+      rafIdRef.current = requestAnimationFrame(animate)
     }
-  }, [startPaused, start])
+  }, []) // Only run on mount
+
+  // Handle startPaused prop changes (pause/resume based on external state)
+  useEffect(() => {
+    // Skip if this is the initial render or no change
+    if (prevStartPausedRef.current === startPaused) {
+      return
+    }
+
+    prevStartPausedRef.current = startPaused
+
+    if (startPaused) {
+      // Pause the animation but preserve current progress
+      if (isRunningRef.current && !isPausedRef.current) {
+        // Use the tracked current progress (more reliable than recalculating)
+        const currentProgress = currentProgressRef.current
+
+        // Store current progress for when we resume
+        initialProgressRef.current = currentProgress
+
+        isPausedRef.current = true
+        pausedTimeRef.current = performance.now()
+
+        // Notify of pause at current position
+        const state = calculateState(currentProgress)
+        onPositionUpdateRef.current({ ...state, isPaused: true })
+      } else if (!isRunningRef.current) {
+        // Not running yet but need to be paused
+        isPausedRef.current = true
+      }
+    } else {
+      // Resume the animation from current progress
+      if (isPausedRef.current) {
+        // Use stored progress (initialProgressRef was set when pausing)
+        const resumeProgress = initialProgressRef.current
+
+        isPausedRef.current = false
+        pausedTimeRef.current = null
+
+        // Reset timing to start fresh from the stored progress
+        startTimeRef.current = null
+        totalPausedDurationRef.current = 0
+
+        // Ensure animation is running
+        isRunningRef.current = true
+        hasArrivedRef.current = false
+
+        // Resume animation loop
+        if (rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(animate)
+        }
+      } else if (!isRunningRef.current && !hasArrivedRef.current) {
+        // Start fresh if not running yet
+        start()
+      }
+    }
+  }, [startPaused, animate, calculateState, start])
 
   return {
     start,
