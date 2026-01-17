@@ -40,7 +40,7 @@ export interface ShipmentStop {
   label?: string
   dwellTimeMs?: number
   completed?: boolean
-  completedAt?: Date
+  completedAt?: string
 }
 
 export interface ShipmentRouteState {
