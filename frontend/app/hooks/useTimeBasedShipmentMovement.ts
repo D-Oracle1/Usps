@@ -345,28 +345,39 @@ export function useTimeBasedShipmentMovement(
   }, [calculateState])
 
   /**
-   * Seek to specific progress (0-1)
+   * Seek to specific progress (0-1) - used when admin drags the truck
+   * Maintains automatic movement from the new position
    */
   const seekTo = useCallback((progress: number) => {
     progress = Math.max(0, Math.min(1, progress))
     initialProgressRef.current = progress
+    currentProgressRef.current = progress
 
-    // Reset timing if currently running
-    if (isRunningRef.current) {
-      startTimeRef.current = performance.now()
-      totalPausedDurationRef.current = 0
-    }
+    // Reset timing
+    startTimeRef.current = performance.now()
+    totalPausedDurationRef.current = 0
 
     // Check for arrival
     if (progress >= 1) {
       hasArrivedRef.current = true
       isRunningRef.current = false
+      isPausedRef.current = false
+    } else {
+      // Ensure animation continues from new position (if not paused)
+      hasArrivedRef.current = false
+      if (!isPausedRef.current) {
+        isRunningRef.current = true
+        // Restart animation loop if not already running
+        if (rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(animate)
+        }
+      }
     }
 
     // Notify of new position
     const state = calculateState(progress)
     onPositionUpdateRef.current(state)
-  }, [calculateState])
+  }, [calculateState, animate])
 
   /**
    * Set new destination (for admin rerouting)

@@ -253,21 +253,23 @@ const originIcon = createIcon('#22c55e', '<svg width="16" height="16" viewBox="0
 const destinationIcon = createIcon('#ef4444', '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>')
 
 // Create truck icon with rotation
-function createTruckIcon(bearing: number = 0, isPaused: boolean = false): L.DivIcon {
+function createTruckIcon(bearing: number = 0, isPaused: boolean = false, isDragging: boolean = false): L.DivIcon {
   return L.divIcon({
     className: 'truck-marker',
     html: `
       <div style="
         width: 48px;
         height: 48px;
-        background: linear-gradient(135deg, ${isPaused ? '#dc2626' : '#333366'} 0%, ${isPaused ? '#991b1b' : '#1a1a4e'} 100%);
-        border: 4px solid white;
+        background: linear-gradient(135deg, ${isPaused ? '#dc2626' : isDragging ? '#059669' : '#333366'} 0%, ${isPaused ? '#991b1b' : isDragging ? '#047857' : '#1a1a4e'} 100%);
+        border: 4px solid ${isDragging ? '#10b981' : 'white'};
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-        transform: rotate(${bearing}deg);
+        box-shadow: ${isDragging ? '0 4px 20px rgba(16,185,129,0.6)' : '0 4px 15px rgba(0,0,0,0.4)'};
+        transform: rotate(${bearing}deg) ${isDragging ? 'scale(1.1)' : ''};
+        cursor: ${isDragging ? 'grabbing' : 'grab'};
+        transition: transform 0.1s, border-color 0.2s, box-shadow 0.2s;
         ${isPaused ? '' : 'animation: pulse 2s infinite;'}
       ">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="white" style="transform: rotate(-${bearing}deg);">
@@ -279,6 +281,10 @@ function createTruckIcon(bearing: number = 0, isPaused: boolean = false): L.DivI
           0% { box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
           50% { box-shadow: 0 4px 25px rgba(51,51,102,0.6); }
           100% { box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+        }
+        .truck-marker:hover > div {
+          transform: rotate(${bearing}deg) scale(1.05);
+          cursor: grab;
         }
       </style>
     `,
@@ -300,7 +306,8 @@ function MapContent({
   onLocationUpdate,
   onMarkerRef,
   onProgressUpdate,
-  onMapRef
+  onMapRef,
+  onDragStateChange
 }: {
   origin: L.LatLng
   destination: L.LatLng
@@ -314,10 +321,12 @@ function MapContent({
   onMarkerRef: (marker: L.Marker | null) => void
   onProgressUpdate?: (progress: number) => void
   onMapRef?: (map: L.Map) => void
+  onDragStateChange?: (isDragging: boolean) => void
 }) {
   const map = useMap()
   const hasInitialized = useRef(false)
   const markerRef = useRef<L.Marker | null>(null)
+  const isDraggingRef = useRef(false)
 
   // Store map ref
   useEffect(() => {
@@ -340,6 +349,16 @@ function MapContent({
     hasInitialized.current = true
   }, [map, origin, destination])
 
+  // Handle marker drag start
+  const handleDragStart = useCallback(() => {
+    isDraggingRef.current = true
+    onDragStateChange?.(true)
+    const marker = markerRef.current
+    if (marker) {
+      marker.setIcon(createTruckIcon(0, isPaused, true))
+    }
+  }, [isPaused, onDragStateChange])
+
   // Handle marker drag - snap to route
   const handleDrag = useCallback(() => {
     const marker = markerRef.current
@@ -354,6 +373,8 @@ function MapContent({
 
   // Handle marker drag end - snap to route and update
   const handleDragEnd = useCallback(() => {
+    isDraggingRef.current = false
+    onDragStateChange?.(false)
     const marker = markerRef.current
     if (marker && routeLine.length > 0) {
       const pos = marker.getLatLng()
@@ -361,13 +382,15 @@ function MapContent({
       const { point: snappedPoint, progress } = findNearestPointOnRoute(pos, routeLine)
       // Update marker to snapped position
       marker.setLatLng(snappedPoint)
+      // Reset icon to normal
+      marker.setIcon(createTruckIcon(0, isPaused, false))
       // Notify parent with snapped coordinates and progress
       onLocationUpdate(snappedPoint.lat, snappedPoint.lng, progress)
       if (onProgressUpdate) {
         onProgressUpdate(progress)
       }
     }
-  }, [routeLine, onLocationUpdate, onProgressUpdate])
+  }, [routeLine, onLocationUpdate, onProgressUpdate, isPaused, onDragStateChange])
 
   // Store marker ref
   useEffect(() => {
@@ -395,17 +418,18 @@ function MapContent({
       {/* Destination marker */}
       <Marker position={destination} icon={destinationIcon} />
 
-      {/* Truck marker - IMPERATIVE UPDATES */}
+      {/* Truck marker - IMPERATIVE UPDATES - Draggable by admin */}
       {showTruck && (
         <Marker
           position={initialPosition}
-          icon={createTruckIcon(0, isPaused)}
+          icon={createTruckIcon(0, isPaused, false)}
           draggable={true}
           ref={(ref) => {
             markerRef.current = ref
             onMarkerRef(ref)
           }}
           eventHandlers={{
+            dragstart: handleDragStart,
             drag: handleDrag,
             dragend: handleDragEnd,
           }}
@@ -565,6 +589,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
   const [vehicleSpeedKmh, setVehicleSpeedKmh] = useState(105) // Default ~65 mph
   const [truckPosition, setTruckPosition] = useState<L.LatLng | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   // Marker ref for imperative updates
   const markerRef = useRef<L.Marker | null>(null)
@@ -686,6 +711,11 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     movement.setVehicleSpeed(speedKmh)
   }, [movement])
 
+  // Handle drag state change
+  const handleDragStateChange = useCallback((dragging: boolean) => {
+    setIsDragging(dragging)
+  }, [])
+
   // Handle location update from marker drag (with route snapping)
   const handleLocationUpdate = useCallback(async (lat: number, lng: number, progress: number) => {
     setIsUpdating(true)
@@ -753,6 +783,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
           onLocationUpdate={handleLocationUpdate}
           onMarkerRef={handleMarkerRef}
           onMapRef={handleMapRef}
+          onDragStateChange={handleDragStateChange}
         />
       </MapContainer>
 
@@ -776,10 +807,14 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
 
       {/* Drag hint */}
       {showTruck && !isUpdating && (
-        <div className="absolute top-4 right-4 z-[1000] bg-white rounded-lg shadow-lg px-3 py-2">
+        <div className={`absolute top-4 right-4 z-[1000] rounded-lg shadow-lg px-3 py-2 transition-colors ${
+          isDragging ? 'bg-green-500 text-white' : 'bg-white'
+        }`}>
           <div className="flex items-center space-x-2">
-            <GripVertical className="w-4 h-4 text-gray-500" />
-            <span className="text-xs text-gray-600">Drag truck along route to update</span>
+            <GripVertical className={`w-4 h-4 ${isDragging ? 'text-white' : 'text-gray-500'}`} />
+            <span className={`text-xs ${isDragging ? 'text-white font-medium' : 'text-gray-600'}`}>
+              {isDragging ? 'Release to set new position...' : 'Drag truck along route to reposition'}
+            </span>
           </div>
         </div>
       )}
