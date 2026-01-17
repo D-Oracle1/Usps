@@ -60,6 +60,10 @@ export interface UseTimeBasedShipmentMovementResult {
   seekTo: (progress: number) => void
   /** Set new destination (for admin rerouting) */
   setDestination: (newDestination: LatLng) => void
+  /** Set speed multiplier (1 = normal, 2 = 2x faster, 0.5 = half speed) */
+  setSpeedMultiplier: (multiplier: number) => void
+  /** Get current speed multiplier */
+  getSpeedMultiplier: () => number
   /** Get current state snapshot */
   getState: () => MovementState
   /** Whether currently moving */
@@ -126,6 +130,7 @@ export function useTimeBasedShipmentMovement(
   const routeRef = useRef<LatLng[] | undefined>(route)
   const durationRef = useRef<number>(durationMs)
   const speedRef = useRef<number>(averageSpeedKmh)
+  const speedMultiplierRef = useRef<number>(1)
 
   // Animation timing refs
   const startTimeRef = useRef<number | null>(null)
@@ -227,8 +232,9 @@ export function useTimeBasedShipmentMovement(
       startTimeRef.current = timestamp
     }
 
-    // Calculate elapsed time (accounting for pauses)
-    const elapsed = timestamp - startTimeRef.current - totalPausedDurationRef.current
+    // Calculate elapsed time (accounting for pauses and speed multiplier)
+    const rawElapsed = timestamp - startTimeRef.current - totalPausedDurationRef.current
+    const elapsed = rawElapsed * speedMultiplierRef.current
 
     // Calculate progress based on time
     const duration = durationRef.current
@@ -388,6 +394,38 @@ export function useTimeBasedShipmentMovement(
   }, [calculateState])
 
   /**
+   * Set speed multiplier (1 = normal, 2 = 2x faster, 0.5 = half speed)
+   */
+  const setSpeedMultiplier = useCallback((multiplier: number) => {
+    // Clamp multiplier to reasonable range
+    multiplier = Math.max(0.1, Math.min(10, multiplier))
+
+    // When changing speed, we need to adjust timing to maintain current position
+    if (isRunningRef.current && startTimeRef.current !== null) {
+      const now = performance.now()
+      const rawElapsed = now - startTimeRef.current - totalPausedDurationRef.current
+      const currentEffectiveElapsed = rawElapsed * speedMultiplierRef.current
+
+      // Calculate new start time so that current position is preserved
+      // newRawElapsed * newMultiplier = currentEffectiveElapsed
+      // newRawElapsed = currentEffectiveElapsed / newMultiplier
+      // now - newStartTime - totalPaused = newRawElapsed
+      // newStartTime = now - totalPaused - newRawElapsed
+      const newRawElapsed = currentEffectiveElapsed / multiplier
+      startTimeRef.current = now - totalPausedDurationRef.current - newRawElapsed
+    }
+
+    speedMultiplierRef.current = multiplier
+  }, [])
+
+  /**
+   * Get current speed multiplier
+   */
+  const getSpeedMultiplier = useCallback((): number => {
+    return speedMultiplierRef.current
+  }, [])
+
+  /**
    * Get current state snapshot
    */
   const getState = useCallback((): MovementState => {
@@ -395,7 +433,8 @@ export function useTimeBasedShipmentMovement(
       return calculateState(initialProgressRef.current)
     }
 
-    const elapsed = performance.now() - (startTimeRef.current || 0) - totalPausedDurationRef.current
+    const rawElapsed = performance.now() - (startTimeRef.current || 0) - totalPausedDurationRef.current
+    const elapsed = rawElapsed * speedMultiplierRef.current
     const progress = Math.min(1, initialProgressRef.current + (elapsed / durationRef.current) * (1 - initialProgressRef.current))
     return calculateState(progress)
   }, [calculateState])
@@ -502,6 +541,8 @@ export function useTimeBasedShipmentMovement(
     reset,
     seekTo,
     setDestination,
+    setSpeedMultiplier,
+    getSpeedMultiplier,
     getState,
     isMoving
   }

@@ -26,7 +26,9 @@ import {
   AlertCircle,
   GripVertical,
   Clock,
-  MapPin
+  MapPin,
+  Crosshair,
+  Gauge
 } from 'lucide-react'
 import { useTimeBasedShipmentMovement, type MovementState } from '../../hooks/useTimeBasedShipmentMovement'
 import { haversineDistance, type LatLng } from '../../utils/bearing'
@@ -293,9 +295,12 @@ function MapContent({
   initialPosition,
   isPaused,
   showTruck,
+  followTruck,
+  truckPosition,
   onLocationUpdate,
   onMarkerRef,
-  onProgressUpdate
+  onProgressUpdate,
+  onMapRef
 }: {
   origin: L.LatLng
   destination: L.LatLng
@@ -303,13 +308,28 @@ function MapContent({
   initialPosition: L.LatLng
   isPaused: boolean
   showTruck: boolean
+  followTruck: boolean
+  truckPosition: L.LatLng | null
   onLocationUpdate: (lat: number, lng: number, progress: number) => void
   onMarkerRef: (marker: L.Marker | null) => void
   onProgressUpdate?: (progress: number) => void
+  onMapRef?: (map: L.Map) => void
 }) {
   const map = useMap()
   const hasInitialized = useRef(false)
   const markerRef = useRef<L.Marker | null>(null)
+
+  // Store map ref
+  useEffect(() => {
+    onMapRef?.(map)
+  }, [map, onMapRef])
+
+  // Follow truck when enabled
+  useEffect(() => {
+    if (followTruck && truckPosition && showTruck) {
+      map.panTo(truckPosition, { animate: true, duration: 0.5 })
+    }
+  }, [followTruck, truckPosition, showTruck, map])
 
   // Fit bounds on mount
   useEffect(() => {
@@ -511,6 +531,15 @@ function InfoPanel({
   )
 }
 
+// Speed control presets
+const SPEED_PRESETS = [
+  { label: '0.5x', value: 0.5 },
+  { label: '1x', value: 1 },
+  { label: '2x', value: 2 },
+  { label: '5x', value: 5 },
+  { label: '10x', value: 10 },
+]
+
 // Main component
 export default function ShipmentMap({ shipment, onMovementStateChange }: Props) {
   const [isInfoExpanded, setIsInfoExpanded] = useState(true)
@@ -518,9 +547,13 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
   const [movementState, setMovementState] = useState<MovementState | null>(null)
   const [routeLine, setRouteLine] = useState<L.LatLng[]>([])
   const [isRouteLoading, setIsRouteLoading] = useState(true)
+  const [followTruck, setFollowTruck] = useState(false)
+  const [speedMultiplier, setSpeedMultiplier] = useState(1)
+  const [truckPosition, setTruckPosition] = useState<L.LatLng | null>(null)
 
   // Marker ref for imperative updates
   const markerRef = useRef<L.Marker | null>(null)
+  const mapRef = useRef<L.Map | null>(null)
   const lastBearingRef = useRef<number>(0)
 
   // Calculate origin and destination coordinates
@@ -573,10 +606,14 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
   const handlePositionUpdate = useCallback((state: MovementState) => {
     setMovementState(state)
 
+    // Update truck position for following
+    const newTruckPos = L.latLng(state.position.lat, state.position.lng)
+    setTruckPosition(newTruckPos)
+
     // IMPERATIVE: Update marker position directly
     const marker = markerRef.current
     if (marker) {
-      marker.setLatLng(L.latLng(state.position.lat, state.position.lng))
+      marker.setLatLng(newTruckPos)
 
       // Update icon if bearing changed significantly (> 5 degrees)
       if (Math.abs(state.bearing - lastBearingRef.current) > 5) {
@@ -591,6 +628,18 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     console.log('Shipment arrived at destination')
     // Could trigger a status update here
   }, [])
+
+  // Handle map ref
+  const handleMapRef = useCallback((map: L.Map) => {
+    mapRef.current = map
+  }, [])
+
+  // Center on truck
+  const centerOnTruck = useCallback(() => {
+    if (mapRef.current && truckPosition) {
+      mapRef.current.flyTo(truckPosition, 10, { animate: true, duration: 0.5 })
+    }
+  }, [truckPosition])
 
   // Convert routeLine (L.LatLng[]) to LatLng[] for the movement hook
   const routeAsLatLng = useMemo(() => {
@@ -609,6 +658,12 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     onPositionUpdate: handlePositionUpdate,
     onArrival: handleArrival
   })
+
+  // Handle speed change
+  const handleSpeedChange = useCallback((newSpeed: number) => {
+    setSpeedMultiplier(newSpeed)
+    movement.setSpeedMultiplier(newSpeed)
+  }, [movement])
 
   // Handle location update from marker drag (with route snapping)
   const handleLocationUpdate = useCallback(async (lat: number, lng: number, progress: number) => {
@@ -672,8 +727,11 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
           initialPosition={initialPosition}
           isPaused={isPaused}
           showTruck={showTruck}
+          followTruck={followTruck}
+          truckPosition={truckPosition}
           onLocationUpdate={handleLocationUpdate}
           onMarkerRef={handleMarkerRef}
+          onMapRef={handleMapRef}
         />
       </MapContainer>
 
@@ -702,6 +760,61 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
             <GripVertical className="w-4 h-4 text-gray-500" />
             <span className="text-xs text-gray-600">Drag truck along route to update</span>
           </div>
+        </div>
+      )}
+
+      {/* Speed Control Panel */}
+      {showTruck && (
+        <div className="absolute top-16 right-4 z-[1000] bg-white rounded-lg shadow-lg p-3">
+          <div className="flex items-center space-x-2 mb-2">
+            <Gauge className="w-4 h-4 text-gray-600" />
+            <span className="text-xs font-medium text-gray-700">Speed Control</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {SPEED_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                onClick={() => handleSpeedChange(preset.value)}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  speedMultiplier === preset.value
+                    ? 'bg-[#333366] text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 text-xs text-gray-500 text-center">
+            Current: {speedMultiplier}x speed
+          </div>
+        </div>
+      )}
+
+      {/* Truck Tracking Controls */}
+      {showTruck && (
+        <div className="absolute top-44 right-4 z-[1000] flex flex-col gap-2">
+          {/* Center on truck button */}
+          <button
+            onClick={centerOnTruck}
+            className="bg-white rounded-lg shadow-lg p-2 hover:bg-gray-50 transition-colors"
+            title="Center on truck"
+          >
+            <Crosshair className="w-5 h-5 text-gray-700" />
+          </button>
+
+          {/* Follow truck toggle */}
+          <button
+            onClick={() => setFollowTruck(!followTruck)}
+            className={`rounded-lg shadow-lg p-2 transition-colors ${
+              followTruck
+                ? 'bg-[#333366] text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+            title={followTruck ? 'Stop following truck' : 'Follow truck'}
+          >
+            <Navigation className={`w-5 h-5 ${followTruck ? 'animate-pulse' : ''}`} />
+          </button>
         </div>
       )}
 
