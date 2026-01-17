@@ -74,7 +74,13 @@
       "Bash(npx prisma db execute:*)",
       "Bash(npx prisma db pull:*)",
       "Bash(DEBUG=\"*\" npx prisma db push:*)",
-      "Bash(ss:*)"
+      "Bash(ss:*)",
+      "Bash(/c/Program Files/nodejs/npm --version)",
+      "Bash(npx prisma:*)",
+      "Bash(npm.cmd install:*)",
+      "Bash(npx.cmd prisma migrate:*)",
+      "Bash(npx next:*)",
+      "Bash(./node_modules/.bin/next dev:*)"
     ]
   }
 }
