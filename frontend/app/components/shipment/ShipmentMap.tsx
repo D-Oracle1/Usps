@@ -629,6 +629,9 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
     loadRoute()
   }, [origin, destination])
 
+  // Ref to track if we've applied the saved state to the movement hook
+  const hasAppliedSavedStateRef = useRef(false)
+
   // Load saved movement state (speed and progress) on mount
   useEffect(() => {
     const loadSavedState = async () => {
@@ -637,7 +640,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
         const state = response.data
 
         // Set saved speed
-        if (state.vehicleSpeedKmh) {
+        if (state.vehicleSpeedKmh && state.vehicleSpeedKmh !== 105) {
           setVehicleSpeedKmh(state.vehicleSpeedKmh)
         }
 
@@ -771,6 +774,26 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
     onPositionUpdate: handlePositionUpdate,
     onArrival: handleArrival
   })
+
+  // Apply saved state to movement hook AFTER it's initialized and state is loaded
+  useEffect(() => {
+    if (!initialStateLoaded || hasAppliedSavedStateRef.current) return
+    if (routeLine.length === 0) return // Wait for route to load
+
+    hasAppliedSavedStateRef.current = true
+
+    // Apply saved progress (seek to saved position)
+    if (savedProgress > 0) {
+      console.log('Applying saved progress:', savedProgress)
+      movement.seekTo(savedProgress)
+    }
+
+    // Apply saved speed
+    if (vehicleSpeedKmh !== 105) {
+      console.log('Applying saved speed:', vehicleSpeedKmh)
+      movement.setVehicleSpeed(vehicleSpeedKmh)
+    }
+  }, [initialStateLoaded, routeLine.length, savedProgress, vehicleSpeedKmh, movement])
 
   // Handle animation speed change (multiplier)
   const handleSpeedChange = useCallback((newSpeed: number) => {

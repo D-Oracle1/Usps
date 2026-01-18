@@ -136,6 +136,27 @@ export default function PublicTrackingMapPage() {
     movementRef.current = movement
   }, [movement])
 
+  // Apply saved speed and progress to movement hook after initial load
+  const hasAppliedInitialStateRef = useRef(false)
+  useEffect(() => {
+    if (hasAppliedInitialStateRef.current) return
+    if (!movementReady || !movement) return
+
+    hasAppliedInitialStateRef.current = true
+
+    // Apply saved speed if different from default
+    if (vehicleSpeedKmh !== 80) {
+      console.log('Applying saved speed to movement hook:', vehicleSpeedKmh)
+      movement.setVehicleSpeed(vehicleSpeedKmh)
+    }
+
+    // Apply saved progress if available
+    if (savedProgress > 0) {
+      console.log('Applying saved progress to movement hook:', savedProgress)
+      movement.seekTo(savedProgress)
+    }
+  }, [movementReady, movement, vehicleSpeedKmh, savedProgress])
+
   // Load shipment data
   useEffect(() => {
     const loadShipment = async () => {
