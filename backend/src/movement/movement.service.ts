@@ -845,6 +845,7 @@ export class MovementService {
     latitude: number,
     longitude: number,
     addressLabel?: string,
+    progress?: number,
   ) {
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId },
@@ -916,13 +917,16 @@ export class MovementService {
       },
     });
 
-    // Emit location update via websocket
+    // Emit location update via websocket with progress for sync
     this.trackingGateway.emitLocationUpdate(shipmentId, {
       latitude,
       longitude,
       remainingDistance: newRemainingDistance,
       estimatedArrival: newEta,
       currentLocation: locationString,
+      progress: progress !== undefined ? {
+        percentComplete: Math.round(progress * 100),
+      } : undefined,
     });
 
     return {

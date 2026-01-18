@@ -310,7 +310,22 @@ export default function PublicTrackingMapPage() {
     })
 
     socket.current.on('locationUpdate', (data) => {
-      // Location updates from server - update shipment data but let local animation handle position
+      // Location updates from server - sync position with admin map
+      if (data.latitude !== undefined && data.longitude !== undefined) {
+        // Update position imperatively for smooth sync
+        animatedPositionRef.current = [data.latitude, data.longitude]
+        if (truckMarkerRef.current) {
+          truckMarkerRef.current.setLatLng([data.latitude, data.longitude])
+        }
+
+        // If progress info is included, seek the movement hook
+        if (data.progress?.percentComplete !== undefined && movementRef.current) {
+          const progress = data.progress.percentComplete / 100
+          movementRef.current.seekTo(progress)
+        }
+      }
+
+      // Update shipment data
       if (data.remainingDistance !== undefined || data.estimatedArrival || data.eta || data.distance) {
         setShipment(prev => {
           if (!prev) return prev
@@ -891,63 +906,88 @@ export default function PublicTrackingMapPage() {
                 <Clock className="w-5 h-5 mr-2 text-[#333366]" />
                 Shipment History
               </h3>
+
+              {/* Trip Started Banner */}
+              {shipment.tripStartedAt && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-blue-600" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800">Shipment Started Moving</p>
+                      <p className="text-xs text-blue-600">{formatDate(shipment.tripStartedAt)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {events.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   No tracking events yet
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {events.map((event, index) => (
-                    <div key={event.id} className="flex">
-                      <div className="flex flex-col items-center mr-4">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          index === 0 ? 'bg-[#333366]' :
-                          event.status === 'INTERCEPTED' ? 'bg-red-500' :
-                          event.status === 'CLEARED' ? 'bg-emerald-500' :
-                          event.status === 'DELIVERED' ? 'bg-green-500' :
-                          'bg-gray-300'
-                        }`}>
-                          {event.status === 'INTERCEPTED' ? (
-                            <AlertTriangle className="w-4 h-4 text-white" />
-                          ) : event.status === 'CLEARED' ? (
-                            <ShieldCheck className="w-4 h-4 text-white" />
-                          ) : event.status === 'DELIVERED' ? (
-                            <CheckCircle className="w-4 h-4 text-white" />
-                          ) : (
-                            <Package className="w-4 h-4 text-white" />
+                  {events.map((event, index) => {
+                    // Check if this is the "movement started" event
+                    const isMovementStarted = event.status === 'IN_TRANSIT' &&
+                      event.description?.toLowerCase().includes('movement started')
+
+                    return (
+                      <div key={event.id} className="flex">
+                        <div className="flex flex-col items-center mr-4">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            index === 0 ? 'bg-[#333366]' :
+                            event.status === 'INTERCEPTED' ? 'bg-red-500' :
+                            event.status === 'CLEARED' ? 'bg-emerald-500' :
+                            event.status === 'DELIVERED' ? 'bg-green-500' :
+                            isMovementStarted ? 'bg-blue-500' :
+                            'bg-gray-300'
+                          }`}>
+                            {event.status === 'INTERCEPTED' ? (
+                              <AlertTriangle className="w-4 h-4 text-white" />
+                            ) : event.status === 'CLEARED' ? (
+                              <ShieldCheck className="w-4 h-4 text-white" />
+                            ) : event.status === 'DELIVERED' ? (
+                              <CheckCircle className="w-4 h-4 text-white" />
+                            ) : isMovementStarted ? (
+                              <Truck className="w-4 h-4 text-white" />
+                            ) : (
+                              <Package className="w-4 h-4 text-white" />
+                            )}
+                          </div>
+                          {index < events.length - 1 && (
+                            <div className="w-0.5 h-full bg-gray-200 min-h-[40px]" />
                           )}
                         </div>
-                        {index < events.length - 1 && (
-                          <div className="w-0.5 h-full bg-gray-200 min-h-[40px]" />
-                        )}
-                      </div>
-                      <div className="flex-1 pb-6">
-                        <div className={`p-3 rounded-lg ${
-                          event.status === 'INTERCEPTED' ? 'bg-red-50 border border-red-100' :
-                          event.status === 'CLEARED' ? 'bg-emerald-50 border border-emerald-100' :
-                          event.status === 'DELIVERED' ? 'bg-green-50 border border-green-100' :
-                          'bg-gray-50'
-                        }`}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-sm font-semibold ${
-                              event.status === 'INTERCEPTED' ? 'text-red-700' :
-                              event.status === 'CLEARED' ? 'text-emerald-700' :
-                              event.status === 'DELIVERED' ? 'text-green-700' :
-                              'text-gray-900'
-                            }`}>
-                              {event.status.replace(/_/g, ' ')}
-                            </span>
-                            <span className="text-xs text-gray-500">{formatDate(event.eventTime)}</span>
-                          </div>
-                          <p className="text-sm text-gray-600">{event.description}</p>
-                          <div className="flex items-center text-xs text-gray-500 mt-1">
-                            <MapPin className="w-3 h-3 mr-1" />
-                            {event.location}
+                        <div className="flex-1 pb-6">
+                          <div className={`p-3 rounded-lg ${
+                            event.status === 'INTERCEPTED' ? 'bg-red-50 border border-red-100' :
+                            event.status === 'CLEARED' ? 'bg-emerald-50 border border-emerald-100' :
+                            event.status === 'DELIVERED' ? 'bg-green-50 border border-green-100' :
+                            isMovementStarted ? 'bg-blue-50 border border-blue-100' :
+                            'bg-gray-50'
+                          }`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-sm font-semibold ${
+                                event.status === 'INTERCEPTED' ? 'text-red-700' :
+                                event.status === 'CLEARED' ? 'text-emerald-700' :
+                                event.status === 'DELIVERED' ? 'text-green-700' :
+                                isMovementStarted ? 'text-blue-700' :
+                                'text-gray-900'
+                              }`}>
+                                {isMovementStarted ? 'SHIPMENT STARTED' : event.status.replace(/_/g, ' ')}
+                              </span>
+                              <span className="text-xs text-gray-500">{formatDate(event.eventTime)}</span>
+                            </div>
+                            <p className="text-sm text-gray-600">{event.description}</p>
+                            <div className="flex items-center text-xs text-gray-500 mt-1">
+                              <MapPin className="w-3 h-3 mr-1" />
+                              {event.location}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

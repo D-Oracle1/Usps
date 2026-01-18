@@ -608,6 +608,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
   const [savedProgress, setSavedProgress] = useState(0)
+  const [deliveryDays, setDeliveryDays] = useState('2')
 
   // Marker ref for imperative updates
   const markerRef = useRef<L.Marker | null>(null)
@@ -690,10 +691,9 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
   // Check if movement should be paused
   const isPaused = shipment.movementState ? !shipment.movementState.isMoving : false
 
-  // Should show truck
+  // Should show truck - show for PENDING too so admin can start movement
   const showTruck = shipment.currentStatus !== 'DELIVERED' &&
-                   shipment.currentStatus !== 'CANCELLED' &&
-                   shipment.currentStatus !== 'PENDING'
+                   shipment.currentStatus !== 'CANCELLED'
 
   // Periodic progress saving (every 30 seconds)
   useEffect(() => {
@@ -844,9 +844,14 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
 
   // Handle start movement
   const handleStartMovement = useCallback(async () => {
+    const days = parseFloat(deliveryDays)
+    if (isNaN(days) || days < 0.1) {
+      alert('Please enter a valid delivery time (minimum 0.1 days)')
+      return
+    }
     setIsUpdating(true)
     try {
-      await api.post(`/movement/${shipment.id}/start`)
+      await api.post(`/movement/${shipment.id}/start`, { deliveryDays: days })
       movement.start()
       onMovementStateChange?.()
       setShowTruckModal(false)
@@ -855,7 +860,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
     } finally {
       setIsUpdating(false)
     }
-  }, [shipment.id, movement, onMovementStateChange])
+  }, [shipment.id, movement, onMovementStateChange, deliveryDays])
 
   // Handle pause movement
   const handlePauseMovement = useCallback(async () => {
@@ -957,6 +962,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
       await api.post(`/movement/${shipment.id}/update-location`, {
         latitude: lat,
         longitude: lng,
+        progress: progress, // Send progress for syncing with public map
       })
 
       // Use the progress from route snapping (more accurate than distance-based)
@@ -1210,8 +1216,30 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
               {/* Movement Controls */}
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Movement</p>
-                <div className="flex flex-wrap gap-2">
-                  {!movement.isMoving() && movementState && !movementState.hasArrived && (
+                <div className="space-y-2">
+                  {!movement.isMoving() && movementState && !movementState.hasArrived && shipment.currentStatus === 'PENDING' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={deliveryDays}
+                        onChange={(e) => setDeliveryDays(e.target.value)}
+                        placeholder="Days"
+                        min="0.1"
+                        step="0.5"
+                        className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                      <span className="text-xs text-gray-500">days</span>
+                      <button
+                        onClick={handleStartMovement}
+                        disabled={isUpdating}
+                        className="flex items-center space-x-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+                      >
+                        <Play className="w-4 h-4" />
+                        <span>Start Trip</span>
+                      </button>
+                    </div>
+                  )}
+                  {!movement.isMoving() && movementState && !movementState.hasArrived && shipment.currentStatus !== 'PENDING' && (
                     <button
                       onClick={handleStartMovement}
                       disabled={isUpdating}
@@ -1221,26 +1249,28 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
                       <span>Start</span>
                     </button>
                   )}
-                  {movement.isMoving() && (
-                    <button
-                      onClick={handlePauseMovement}
-                      disabled={isUpdating}
-                      className="flex items-center space-x-1 px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 text-sm"
-                    >
-                      <Pause className="w-4 h-4" />
-                      <span>Pause</span>
-                    </button>
-                  )}
-                  {isPaused && movementState && !movementState.hasArrived && (
-                    <button
-                      onClick={handleResumeMovement}
-                      disabled={isUpdating}
-                      className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
-                    >
-                      <Play className="w-4 h-4" />
-                      <span>Resume</span>
-                    </button>
-                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {movement.isMoving() && (
+                      <button
+                        onClick={handlePauseMovement}
+                        disabled={isUpdating}
+                        className="flex items-center space-x-1 px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 text-sm"
+                      >
+                        <Pause className="w-4 h-4" />
+                        <span>Pause</span>
+                      </button>
+                    )}
+                    {isPaused && movementState && !movementState.hasArrived && (
+                      <button
+                        onClick={handleResumeMovement}
+                        disabled={isUpdating}
+                        className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+                      >
+                        <Play className="w-4 h-4" />
+                        <span>Resume</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

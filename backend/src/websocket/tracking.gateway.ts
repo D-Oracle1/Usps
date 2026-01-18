@@ -38,6 +38,7 @@ interface SimulationState {
   pausedAt: number | null;
   totalPausedTime: number;
   subStep: number;
+  vehicleSpeedKmh: number; // Current vehicle speed for ETA calculation
 }
 
 @WebSocketGateway({
@@ -378,6 +379,9 @@ export class TrackingGateway
     const totalSimulationMs = deliveryHours * 60 * 60 * 1000; // Actual delivery time in ms
     const UPDATE_INTERVAL_MS = Math.max(1000, Math.floor(totalSimulationMs / totalSteps));
 
+    // Calculate initial vehicle speed based on distance and delivery time
+    const initialSpeedKmh = calculatedDistance / deliveryHours;
+
     const state: SimulationState = {
       interval: null as any,
       route,
@@ -390,6 +394,7 @@ export class TrackingGateway
       pausedAt: null,
       totalPausedTime: 0,
       subStep: 0,
+      vehicleSpeedKmh: initialSpeedKmh,
     };
 
     this.logger.log(`Starting real-time simulation for shipment: ${shipmentId}`);
@@ -424,7 +429,7 @@ export class TrackingGateway
         // Calculate speed and heading
         const heading = this.calculateHeading(currentPoint, nextPoint);
         const segmentDistance = this.calculateDistance(currentPoint, nextPoint);
-        const speed = calculatedDistance / deliveryHours; // Average speed in km/h
+        const speed = state.vehicleSpeedKmh; // Use current vehicle speed
 
         // Calculate remaining distance
         const remainingDistance = this.calculateRemainingDistance(
@@ -435,11 +440,8 @@ export class TrackingGateway
         );
         state.remainingDistance = remainingDistance;
 
-        // Calculate ETA based on elapsed time and paused time
-        // Time that has actually passed towards delivery (excluding paused time)
-        const elapsedMs = Date.now() - state.startTime - state.totalPausedTime;
-        const elapsedHours = elapsedMs / (1000 * 60 * 60);
-        const remainingHours = Math.max(0, deliveryHours - elapsedHours);
+        // Calculate ETA based on current vehicle speed and remaining distance
+        const remainingHours = remainingDistance / state.vehicleSpeedKmh;
 
         // Add any current pause time to the ETA
         const currentPauseMs = state.pausedAt ? Date.now() - state.pausedAt : 0;
@@ -628,6 +630,13 @@ export class TrackingGateway
       remainingDistance: number;
     },
   ) {
+    // Update simulation speed if active
+    const simulation = this.activeSimulations.get(shipmentId);
+    if (simulation) {
+      simulation.vehicleSpeedKmh = data.speedKmh;
+      this.logger.log(`Updated simulation speed for shipment: ${shipmentId} to ${data.speedKmh} km/h`);
+    }
+
     const room = `shipment:${shipmentId}`;
     this.server.to(room).emit('speedChanged', {
       shipmentId,
@@ -635,5 +644,16 @@ export class TrackingGateway
       timestamp: new Date(),
     });
     this.logger.log(`Emitted speed change event for shipment: ${shipmentId}, new speed: ${data.speedKmh} km/h`);
+  }
+
+  // Update vehicle speed for an active simulation
+  updateSimulationSpeed(shipmentId: string, speedKmh: number) {
+    const simulation = this.activeSimulations.get(shipmentId);
+    if (simulation) {
+      simulation.vehicleSpeedKmh = speedKmh;
+      this.logger.log(`Updated simulation speed for shipment: ${shipmentId} to ${speedKmh} km/h`);
+      return true;
+    }
+    return false;
   }
 }

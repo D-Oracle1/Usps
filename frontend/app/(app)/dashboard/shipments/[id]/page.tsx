@@ -28,12 +28,16 @@ import {
   AlertTriangle,
   X,
   ShieldCheck,
-  Loader2
+  Loader2,
+  Trash2,
+  History
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
 
 export default function ShipmentDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [timeline, setTimeline] = useState<{ shipment: Shipment; events: TrackingEvent[] } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -42,10 +46,12 @@ export default function ShipmentDetailPage() {
   const [showStartTripModal, setShowStartTripModal] = useState(false)
   const [showInterceptModal, setShowInterceptModal] = useState(false)
   const [showClearModal, setShowClearModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deliveryDays, setDeliveryDays] = useState(3)
   const [interceptReason, setInterceptReason] = useState('')
   const [clearReason, setClearReason] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isClearingHistory, setIsClearingHistory] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -108,6 +114,33 @@ export default function ShipmentDetailPage() {
       alert(error.response?.data?.message || 'Failed to clear goods')
     } finally {
       setIsProcessing(false)
+    }
+  }
+
+  const handleClearHistory = async () => {
+    if (!shipment) return
+    setIsClearingHistory(true)
+    try {
+      await api.post(`/movement/${shipment.id}/clear-history`)
+      await loadData()
+      alert('Tracking history cleared successfully')
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to clear tracking history')
+    } finally {
+      setIsClearingHistory(false)
+    }
+  }
+
+  const handleDeleteShipment = async () => {
+    if (!shipment) return
+    setIsProcessing(true)
+    try {
+      await api.delete(`/shipments/${shipment.id}`)
+      router.push('/dashboard')
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to delete shipment')
+      setIsProcessing(false)
+      setShowDeleteModal(false)
     }
   }
 
@@ -610,6 +643,32 @@ export default function ShipmentDetailPage() {
               </Link>
             </div>
           </div>
+
+          {/* Admin Actions */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Admin Actions</h3>
+            <div className="space-y-2">
+              <button
+                onClick={handleClearHistory}
+                disabled={isClearingHistory}
+                className="flex items-center justify-center w-full px-4 py-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors font-medium disabled:opacity-50"
+              >
+                {isClearingHistory ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <History className="w-4 h-4 mr-2" />
+                )}
+                Clear Tracking History
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="flex items-center justify-center w-full px-4 py-3 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Shipment
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -776,6 +835,62 @@ export default function ShipmentDetailPage() {
                     <>
                       <ShieldCheck className="w-4 h-4 mr-2" />
                       Clear Goods
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Shipment Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="bg-red-600 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white flex items-center">
+                <Trash2 className="w-5 h-5 mr-2" />
+                Delete Shipment
+              </h3>
+              <button onClick={() => setShowDeleteModal(false)} className="text-white/80 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-4">
+                <AlertTriangle className="w-8 h-8 text-red-600" />
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                Are you sure?
+              </h4>
+              <p className="text-gray-600 text-center mb-4">
+                This action cannot be undone. This will permanently delete the shipment and all associated tracking data.
+              </p>
+              <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Tracking Number:</span>{' '}
+                  <span className="font-mono">{shipment.trackingNumber}</span>
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteShipment}
+                  disabled={isProcessing}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
                     </>
                   )}
                 </button>

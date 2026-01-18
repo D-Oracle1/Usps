@@ -46,6 +46,10 @@ class UpdateLocationDto {
   @IsString()
   @IsOptional()
   addressLabel?: string;
+
+  @IsNumber()
+  @IsOptional()
+  progress?: number;
 }
 
 class UpdateSpeedDto {
@@ -182,6 +186,7 @@ export class MovementController {
       dto.latitude,
       dto.longitude,
       dto.addressLabel,
+      dto.progress,
     );
   }
 
