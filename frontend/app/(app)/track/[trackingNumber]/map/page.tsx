@@ -1098,7 +1098,7 @@ export default function PublicTrackingMapPage() {
                 {(displayedETA || shipment.estimatedArrival) && (
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-gray-500">Est. Arrival</span>
-                    <span className="text-sm font-medium text-gray-900">{formatDate(displayedETA || shipment.estimatedArrival)}</span>
+                    <span className="text-sm font-medium text-gray-900">{formatDate((displayedETA || shipment.estimatedArrival)!)}</span>
                   </div>
                 )}
               </div>
