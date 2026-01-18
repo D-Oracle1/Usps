@@ -75,6 +75,9 @@ export default function PublicTrackingMapPage() {
   const [savedProgress, setSavedProgress] = useState(0)
   const movementRef = useRef<any>(null)
 
+  // Separate ETA state for real-time updates from admin speed changes
+  const [displayedETA, setDisplayedETA] = useState<string | null>(null)
+
   // Movement state callback - updates position IMPERATIVELY (no React state for position)
   const handlePositionUpdate = useCallback((state: MovementState) => {
     // Store in refs (no re-render)
@@ -169,6 +172,11 @@ export default function PublicTrackingMapPage() {
 
         setShipment(shipmentData)
         setEvents(eventsData || [])
+
+        // Set initial ETA for display
+        if (shipmentData.estimatedArrival) {
+          setDisplayedETA(shipmentData.estimatedArrival)
+        }
 
         // Check if shipment is in transit and not intercepted
         const shouldMove = shipmentData.currentStatus === 'IN_TRANSIT' &&
@@ -327,12 +335,16 @@ export default function PublicTrackingMapPage() {
 
       // Update shipment data
       if (data.remainingDistance !== undefined || data.estimatedArrival || data.eta || data.distance) {
+        const newETA = data.estimatedArrival ?? data.eta?.arrival
+        if (newETA) {
+          setDisplayedETA(newETA)
+        }
         setShipment(prev => {
           if (!prev) return prev
           return {
             ...prev,
             remainingDistance: data.remainingDistance ?? data.distance?.remaining ?? prev.remainingDistance,
-            estimatedArrival: data.estimatedArrival ?? data.eta?.arrival ?? prev.estimatedArrival,
+            estimatedArrival: newETA ?? prev.estimatedArrival,
             currentLocation: data.currentLocation ?? prev.currentLocation,
           }
         })
@@ -386,8 +398,10 @@ export default function PublicTrackingMapPage() {
       if (movementRef.current) {
         movementRef.current.setVehicleSpeed(data.speedKmh)
       }
-      // Update ETA display
+      // Update ETA display - this is the key update for Status & Dates section
       if (data.estimatedArrival) {
+        console.log('Updating ETA from speed change:', data.estimatedArrival)
+        setDisplayedETA(data.estimatedArrival)
         setShipment(prev => prev ? { ...prev, estimatedArrival: data.estimatedArrival } : null)
       }
     })
@@ -1081,10 +1095,10 @@ export default function PublicTrackingMapPage() {
                   <span className="text-sm text-gray-500">Created</span>
                   <span className="text-sm font-medium text-gray-900">{formatDate(shipment.createdAt)}</span>
                 </div>
-                {shipment.estimatedArrival && (
+                {(displayedETA || shipment.estimatedArrival) && (
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-gray-500">Est. Arrival</span>
-                    <span className="text-sm font-medium text-gray-900">{formatDate(shipment.estimatedArrival)}</span>
+                    <span className="text-sm font-medium text-gray-900">{formatDate(displayedETA || shipment.estimatedArrival)}</span>
                   </div>
                 )}
               </div>
