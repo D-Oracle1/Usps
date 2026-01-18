@@ -656,29 +656,6 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
     loadSavedState()
   }, [shipment.id])
 
-  // Periodic progress saving (every 30 seconds)
-  useEffect(() => {
-    if (!showTruck || !movementState || isPaused) return
-
-    const saveProgress = async () => {
-      if (!movementState || movementState.hasArrived) return
-
-      try {
-        await api.post(`/movement/${shipment.id}/update-progress`, {
-          progress: movementState.progress,
-          latitude: movementState.position.lat,
-          longitude: movementState.position.lng,
-        })
-      } catch (error) {
-        console.error('Failed to save progress:', error)
-      }
-    }
-
-    const interval = setInterval(saveProgress, 30000) // Save every 30 seconds
-
-    return () => clearInterval(interval)
-  }, [shipment.id, showTruck, movementState, isPaused])
-
   // Calculate total distance
   const totalDistance = useMemo(() => haversineDistance(origin, destination), [origin, destination])
 
@@ -714,6 +691,29 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
   const showTruck = shipment.currentStatus !== 'DELIVERED' &&
                    shipment.currentStatus !== 'CANCELLED' &&
                    shipment.currentStatus !== 'PENDING'
+
+  // Periodic progress saving (every 30 seconds)
+  useEffect(() => {
+    if (!showTruck || !movementState || isPaused) return
+
+    const saveProgress = async () => {
+      if (!movementState || movementState.hasArrived) return
+
+      try {
+        await api.post(`/movement/${shipment.id}/update-progress`, {
+          progress: movementState.progress,
+          latitude: movementState.position.lat,
+          longitude: movementState.position.lng,
+        })
+      } catch (error) {
+        console.error('Failed to save progress:', error)
+      }
+    }
+
+    const interval = setInterval(saveProgress, 30000) // Save every 30 seconds
+
+    return () => clearInterval(interval)
+  }, [shipment.id, showTruck, movementState, isPaused])
 
   // Handle position updates from animation (IMPERATIVE MARKER UPDATE)
   const handlePositionUpdate = useCallback((state: MovementState) => {
