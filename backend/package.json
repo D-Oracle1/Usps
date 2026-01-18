@@ -5,8 +5,8 @@
   "main": "dist/main.js",
   "scripts": {
     "prebuild": "rimraf dist",
-    "build": "prisma generate && prisma db push --accept-data-loss && nest build",
-    "start:prod": "node dist/main",
+    "build": "prisma generate && nest build",
+    "start:prod": "prisma db push --accept-data-loss && node dist/main",
     "vercel-build": "prisma generate && nest build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
