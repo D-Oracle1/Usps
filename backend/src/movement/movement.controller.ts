@@ -48,6 +48,24 @@ class UpdateLocationDto {
   addressLabel?: string;
 }
 
+class UpdateSpeedDto {
+  @IsNumber()
+  @Min(1)
+  speedKmh: number;
+}
+
+class UpdateProgressDto {
+  @IsNumber()
+  @Min(0)
+  progress: number;
+
+  @IsNumber()
+  latitude: number;
+
+  @IsNumber()
+  longitude: number;
+}
+
 @Controller('movement')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MovementController {
@@ -165,5 +183,48 @@ export class MovementController {
       dto.longitude,
       dto.addressLabel,
     );
+  }
+
+  @Post(':shipmentId/update-speed')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  updateVehicleSpeed(
+    @Param('shipmentId') shipmentId: string,
+    @Body() dto: UpdateSpeedDto,
+    @Request() req,
+  ) {
+    return this.movementService.updateVehicleSpeed(
+      shipmentId,
+      req.user.userId,
+      dto.speedKmh,
+    );
+  }
+
+  @Post(':shipmentId/update-progress')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  updateProgress(
+    @Param('shipmentId') shipmentId: string,
+    @Body() dto: UpdateProgressDto,
+  ) {
+    return this.movementService.updateProgress(
+      shipmentId,
+      dto.progress,
+      dto.latitude,
+      dto.longitude,
+    );
+  }
+
+  @Post(':shipmentId/clear-history')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  clearTrackingHistory(
+    @Param('shipmentId') shipmentId: string,
+    @Request() req,
+  ) {
+    return this.movementService.clearTrackingHistory(shipmentId, req.user.userId);
+  }
+
+  @Get(':shipmentId/full-state')
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
+  getFullMovementState(@Param('shipmentId') shipmentId: string) {
+    return this.movementService.getFullMovementState(shipmentId);
   }
 }

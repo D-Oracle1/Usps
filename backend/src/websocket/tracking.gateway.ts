@@ -618,4 +618,22 @@ export class TrackingGateway
     });
     this.logger.log(`Emitted address change event for shipment: ${shipmentId}`);
   }
+
+  // Emit speed change event - broadcasts to all clients watching this shipment
+  emitSpeedChange(
+    shipmentId: string,
+    data: {
+      speedKmh: number;
+      estimatedArrival: Date;
+      remainingDistance: number;
+    },
+  ) {
+    const room = `shipment:${shipmentId}`;
+    this.server.to(room).emit('speedChanged', {
+      shipmentId,
+      ...data,
+      timestamp: new Date(),
+    });
+    this.logger.log(`Emitted speed change event for shipment: ${shipmentId}, new speed: ${data.speedKmh} km/h`);
+  }
 }

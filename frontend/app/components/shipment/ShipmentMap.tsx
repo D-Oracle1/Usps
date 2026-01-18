@@ -34,7 +34,8 @@ import {
   StopCircle,
   CheckCircle,
   X,
-  Trash2
+  Trash2,
+  History
 } from 'lucide-react'
 import { useTimeBasedShipmentMovement, type MovementState } from '../../hooks/useTimeBasedShipmentMovement'
 import { haversineDistance, type LatLng } from '../../utils/bearing'
@@ -605,6 +606,8 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
   const [interceptReason, setInterceptReason] = useState('')
   const [clearReason, setClearReason] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [initialStateLoaded, setInitialStateLoaded] = useState(false)
+  const [savedProgress, setSavedProgress] = useState(0)
 
   // Marker ref for imperative updates
   const markerRef = useRef<L.Marker | null>(null)
@@ -626,6 +629,56 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
     loadRoute()
   }, [origin, destination])
 
+  // Load saved movement state (speed and progress) on mount
+  useEffect(() => {
+    const loadSavedState = async () => {
+      try {
+        const response = await api.get(`/movement/${shipment.id}/full-state`)
+        const state = response.data
+
+        // Set saved speed
+        if (state.vehicleSpeedKmh) {
+          setVehicleSpeedKmh(state.vehicleSpeedKmh)
+        }
+
+        // Set saved progress
+        if (state.currentProgress > 0) {
+          setSavedProgress(state.currentProgress)
+        }
+
+        setInitialStateLoaded(true)
+      } catch (error) {
+        console.error('Failed to load saved movement state:', error)
+        setInitialStateLoaded(true)
+      }
+    }
+
+    loadSavedState()
+  }, [shipment.id])
+
+  // Periodic progress saving (every 30 seconds)
+  useEffect(() => {
+    if (!showTruck || !movementState || isPaused) return
+
+    const saveProgress = async () => {
+      if (!movementState || movementState.hasArrived) return
+
+      try {
+        await api.post(`/movement/${shipment.id}/update-progress`, {
+          progress: movementState.progress,
+          latitude: movementState.position.lat,
+          longitude: movementState.position.lng,
+        })
+      } catch (error) {
+        console.error('Failed to save progress:', error)
+      }
+    }
+
+    const interval = setInterval(saveProgress, 30000) // Save every 30 seconds
+
+    return () => clearInterval(interval)
+  }, [shipment.id, showTruck, movementState, isPaused])
+
   // Calculate total distance
   const totalDistance = useMemo(() => haversineDistance(origin, destination), [origin, destination])
 
@@ -640,14 +693,19 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
     return (totalDistance / averageSpeed) * 60 * 60 * 1000 // hours to ms
   }, [totalDistance, averageSpeed, shipment.estimatedArrival, shipment.tripStartedAt])
 
-  // Calculate initial progress from existing locations
+  // Calculate initial progress from saved state or existing locations
   const initialProgress = useMemo(() => {
+    // Use saved progress if available (from database)
+    if (savedProgress > 0) {
+      return savedProgress
+    }
+    // Fall back to calculating from remaining distance
     if (shipment.remainingDistance && shipment.totalDistance) {
       const covered = shipment.totalDistance - shipment.remainingDistance
       return Math.min(1, covered / shipment.totalDistance)
     }
     return 0
-  }, [shipment.remainingDistance, shipment.totalDistance])
+  }, [savedProgress, shipment.remainingDistance, shipment.totalDistance])
 
   // Check if movement should be paused
   const isPaused = shipment.movementState ? !shipment.movementState.isMoving : false
@@ -720,11 +778,18 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
     movement.setSpeedMultiplier(newSpeed)
   }, [movement])
 
-  // Handle vehicle speed change (actual vehicle speed in km/h)
-  const handleVehicleSpeedChange = useCallback((speedKmh: number) => {
+  // Handle vehicle speed change (actual vehicle speed in km/h) - saves to backend
+  const handleVehicleSpeedChange = useCallback(async (speedKmh: number) => {
     setVehicleSpeedKmh(speedKmh)
     movement.setVehicleSpeed(speedKmh)
-  }, [movement])
+
+    // Save to backend (persists and broadcasts to all clients including public tracking)
+    try {
+      await api.post(`/movement/${shipment.id}/update-speed`, { speedKmh })
+    } catch (error) {
+      console.error('Failed to save speed to backend:', error)
+    }
+  }, [movement, shipment.id])
 
   // Handle drag state change
   const handleDragStateChange = useCallback((dragging: boolean) => {
@@ -732,15 +797,22 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
   }, [])
 
   // Handle manual speed input
-  const handleManualSpeedSubmit = useCallback(() => {
+  const handleManualSpeedSubmit = useCallback(async () => {
     const speed = parseFloat(manualSpeedInput)
     if (!isNaN(speed) && speed > 0 && speed <= 120) {
       const speedKmh = mphToKmh(speed)
       setVehicleSpeedKmh(speedKmh)
       movement.setVehicleSpeed(speedKmh)
       setManualSpeedInput('')
+
+      // Save to backend
+      try {
+        await api.post(`/movement/${shipment.id}/update-speed`, { speedKmh })
+      } catch (error) {
+        console.error('Failed to save speed to backend:', error)
+      }
     }
-  }, [manualSpeedInput, movement])
+  }, [manualSpeedInput, movement, shipment.id])
 
   // Handle truck marker click
   const handleTruckClick = useCallback(() => {
@@ -840,6 +912,20 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
       setIsUpdating(false)
     }
   }, [shipment.id, onDelete])
+
+  // Handle clear tracking history
+  const handleClearHistory = useCallback(async () => {
+    setIsUpdating(true)
+    try {
+      await api.post(`/movement/${shipment.id}/clear-history`)
+      onMovementStateChange?.()
+      setShowTruckModal(false)
+    } catch (error) {
+      console.error('Failed to clear history:', error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [shipment.id, onMovementStateChange])
 
   // Handle location update from marker drag (with route snapping)
   const handleLocationUpdate = useCallback(async (lat: number, lng: number, progress: number) => {
@@ -1181,6 +1267,18 @@ export default function ShipmentMap({ shipment, onMovementStateChange, onDelete 
 
               {/* Divider */}
               <div className="border-t border-gray-200 my-2"></div>
+
+              {/* Clear History */}
+              <div>
+                <button
+                  onClick={handleClearHistory}
+                  disabled={isUpdating}
+                  className="flex items-center space-x-1 px-3 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 disabled:opacity-50 text-sm w-full justify-center mb-2"
+                >
+                  <History className="w-4 h-4" />
+                  <span>Clear Tracking History</span>
+                </button>
+              </div>
 
               {/* Delete */}
               <div>

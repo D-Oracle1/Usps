@@ -70,8 +70,10 @@ export default function PublicTrackingMapPage() {
   const [showInterceptNotification, setShowInterceptNotification] = useState(true)
   const [showClearNotification, setShowClearNotification] = useState(false)
 
-  // Average speed for demo purposes (km/h) - adjust for faster/slower demo
-  const DEMO_SPEED_KMH = 80
+  // Vehicle speed state (set by admin, received via WebSocket)
+  const [vehicleSpeedKmh, setVehicleSpeedKmh] = useState(80)
+  const [savedProgress, setSavedProgress] = useState(0)
+  const movementRef = useRef<any>(null)
 
   // Movement state callback - updates position IMPERATIVELY (no React state for position)
   const handlePositionUpdate = useCallback((state: MovementState) => {
@@ -123,11 +125,16 @@ export default function PublicTrackingMapPage() {
       origin: { lat: 39.8283, lng: -98.5795 },
       destination: { lat: 39.8283, lng: -98.5795 },
       durationMs: 60000,
-      averageSpeedKmh: DEMO_SPEED_KMH,
+      averageSpeedKmh: vehicleSpeedKmh,
       startPaused: true,
       onPositionUpdate: handlePositionUpdate,
     }
   )
+
+  // Store movement ref for external updates (like speed changes from WebSocket)
+  useEffect(() => {
+    movementRef.current = movement
+  }, [movement])
 
   // Load shipment data
   useEffect(() => {
@@ -159,6 +166,14 @@ export default function PublicTrackingMapPage() {
           })
         }
 
+        // Load saved speed and progress from movementState
+        if (shipmentData.movementState?.vehicleSpeedKmh) {
+          setVehicleSpeedKmh(shipmentData.movementState.vehicleSpeedKmh)
+        }
+        if (shipmentData.movementState?.currentProgress > 0) {
+          setSavedProgress(shipmentData.movementState.currentProgress)
+        }
+
         // Try to get route info
         try {
           // Get coordinates for origin and destination
@@ -187,7 +202,18 @@ export default function PublicTrackingMapPage() {
           setTripDurationMs(demoDurationMs)
 
           // Set initial position and progress
-          if (shipmentData.currentLocation && shipmentData.currentLocation.includes(',')) {
+          // First check if we have saved progress from the backend
+          if (shipmentData.movementState?.currentProgress > 0) {
+            // Use saved progress from database
+            setInitialProgress(shipmentData.movementState.currentProgress)
+            // Set position based on saved progress if we have saved coordinates
+            if (shipmentData.movementState?.lastPositionLat && shipmentData.movementState?.lastPositionLng) {
+              animatedPositionRef.current = [shipmentData.movementState.lastPositionLat, shipmentData.movementState.lastPositionLng]
+            } else if (shipmentData.currentLocation && shipmentData.currentLocation.includes(',')) {
+              const [lat, lng] = shipmentData.currentLocation.split(',').map(Number)
+              animatedPositionRef.current = [lat, lng]
+            }
+          } else if (shipmentData.currentLocation && shipmentData.currentLocation.includes(',')) {
             const [lat, lng] = shipmentData.currentLocation.split(',').map(Number)
             animatedPositionRef.current = [lat, lng]
 
@@ -314,6 +340,20 @@ export default function PublicTrackingMapPage() {
       setIsMoving(false)
       setIsIntercepted(false)
       setShipment(prev => prev ? { ...prev, currentStatus: 'DELIVERED' } : null)
+    })
+
+    // Listen for speed changes from admin
+    socket.current.on('speedChanged', (data) => {
+      console.log('Speed changed by admin:', data)
+      setVehicleSpeedKmh(data.speedKmh)
+      // Update the movement hook speed if available
+      if (movementRef.current) {
+        movementRef.current.setVehicleSpeed(data.speedKmh)
+      }
+      // Update ETA display
+      if (data.estimatedArrival) {
+        setShipment(prev => prev ? { ...prev, estimatedArrival: data.estimatedArrival } : null)
+      }
     })
 
     return () => {

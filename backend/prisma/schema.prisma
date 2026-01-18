@@ -200,6 +200,14 @@ model ShipmentMovementState {
   interceptedLat      Float?    @map("intercepted_lat")
   interceptedLng      Float?    @map("intercepted_lng")
   interceptedAddress  String?   @map("intercepted_address")
+
+  // Speed and progress persistence
+  vehicleSpeedKmh     Float     @default(105) @map("vehicle_speed_kmh") // Current vehicle speed in km/h
+  currentProgress     Float     @default(0) @map("current_progress") // Progress from 0 to 1
+  lastPositionLat     Float?    @map("last_position_lat") // Last known latitude
+  lastPositionLng     Float?    @map("last_position_lng") // Last known longitude
+  progressUpdatedAt   DateTime? @map("progress_updated_at") // When progress was last saved
+
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
   // Relations

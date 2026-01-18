@@ -967,4 +967,180 @@ export class MovementService {
       addressChangeFees: shipment.addressChangeFees,
     };
   }
+
+  // Update vehicle speed and recalculate ETA
+  async updateVehicleSpeed(
+    shipmentId: string,
+    adminId: string,
+    speedKmh: number,
+  ) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: { movementState: true },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Shipment not found');
+    }
+
+    if (shipment.currentStatus === 'DELIVERED' || shipment.currentStatus === 'CANCELLED') {
+      throw new BadRequestException('Cannot update speed for delivered or cancelled shipment');
+    }
+
+    // Calculate new ETA based on new speed and remaining distance
+    const remainingDistance = shipment.remainingDistance || 0;
+    const hoursRemaining = remainingDistance / speedKmh;
+    const newEta = new Date(Date.now() + hoursRemaining * 60 * 60 * 1000);
+
+    // Update shipment average speed
+    await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: {
+        averageSpeed: speedKmh,
+        estimatedArrival: newEta,
+      },
+    });
+
+    // Update movement state with new speed
+    const movementState = await this.prisma.shipmentMovementState.upsert({
+      where: { shipmentId },
+      update: {
+        vehicleSpeedKmh: speedKmh,
+      },
+      create: {
+        shipmentId,
+        vehicleSpeedKmh: speedKmh,
+      },
+    });
+
+    // Broadcast speed change via WebSocket
+    this.trackingGateway.emitSpeedChange(shipmentId, {
+      speedKmh,
+      estimatedArrival: newEta,
+      remainingDistance,
+    });
+
+    return {
+      message: 'Vehicle speed updated successfully',
+      speedKmh,
+      estimatedArrival: newEta,
+      remainingDistance,
+    };
+  }
+
+  // Update progress and position (for persistence)
+  async updateProgress(
+    shipmentId: string,
+    progress: number,
+    latitude: number,
+    longitude: number,
+  ) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: { movementState: true },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Shipment not found');
+    }
+
+    // Update movement state with progress
+    const movementState = await this.prisma.shipmentMovementState.upsert({
+      where: { shipmentId },
+      update: {
+        currentProgress: progress,
+        lastPositionLat: latitude,
+        lastPositionLng: longitude,
+        progressUpdatedAt: new Date(),
+      },
+      create: {
+        shipmentId,
+        currentProgress: progress,
+        lastPositionLat: latitude,
+        lastPositionLng: longitude,
+        progressUpdatedAt: new Date(),
+      },
+    });
+
+    // Update shipment current location
+    await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: {
+        currentLocation: `${latitude.toFixed(6)},${longitude.toFixed(6)}`,
+      },
+    });
+
+    return {
+      message: 'Progress updated successfully',
+      progress,
+      position: { latitude, longitude },
+    };
+  }
+
+  // Clear tracking history for a shipment
+  async clearTrackingHistory(shipmentId: string, adminId: string) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Shipment not found');
+    }
+
+    // Delete all tracking events for this shipment
+    const deleted = await this.prisma.trackingEvent.deleteMany({
+      where: { shipmentId },
+    });
+
+    // Create a new initial event
+    await this.prisma.trackingEvent.create({
+      data: {
+        shipmentId,
+        status: shipment.currentStatus,
+        description: 'Tracking history cleared',
+        location: shipment.currentLocation || shipment.originLocation,
+        eventTime: new Date(),
+        createdBy: adminId,
+      },
+    });
+
+    return {
+      message: 'Tracking history cleared successfully',
+      deletedCount: deleted.count,
+    };
+  }
+
+  // Get full movement state with speed and progress for restoring on refresh
+  async getFullMovementState(shipmentId: string) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: { movementState: true },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Shipment not found');
+    }
+
+    const movementState = shipment.movementState;
+
+    return {
+      shipmentId,
+      isMoving: movementState?.isMoving ?? false,
+      isPaused: movementState?.pausedBy != null,
+      vehicleSpeedKmh: movementState?.vehicleSpeedKmh ?? 105,
+      currentProgress: movementState?.currentProgress ?? 0,
+      lastPosition: movementState?.lastPositionLat && movementState?.lastPositionLng
+        ? { lat: movementState.lastPositionLat, lng: movementState.lastPositionLng }
+        : null,
+      progressUpdatedAt: movementState?.progressUpdatedAt,
+      totalDistance: shipment.totalDistance,
+      remainingDistance: shipment.remainingDistance,
+      estimatedArrival: shipment.estimatedArrival,
+      tripStartedAt: shipment.tripStartedAt,
+      interceptReason: movementState?.interceptReason,
+      interceptedLat: movementState?.interceptedLat,
+      interceptedLng: movementState?.interceptedLng,
+      interceptedAddress: movementState?.interceptedAddress,
+    };
+  }
 }
