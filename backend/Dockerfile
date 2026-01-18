@@ -18,13 +18,16 @@ COPY backend/ .
 # Build the application
 RUN npm run build
 
-# Copy the start script and fix line endings (Windows CRLF -> Unix LF)
-COPY backend/start.sh ./start.sh
-RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
-
-# Keep prisma for db push at runtime
-# Remove other devDependencies after build (but keep prisma)
-RUN npm prune --production && npm install prisma --save
+# Create start script directly to avoid line ending issues
+# Run prisma db push in background to not block server startup
+RUN printf '#!/bin/sh\n\
+echo "=== Starting USPS Backend ==="\n\
+echo "DATABASE_URL set: $(test -n "$DATABASE_URL" && echo YES || echo NO)"\n\
+npx prisma db push --accept-data-loss --skip-generate &\n\
+PRISMA_PID=$!\n\
+echo "=== Started Prisma DB Push (PID: $PRISMA_PID) ==="\n\
+echo "=== Starting Node Server ==="\n\
+exec node dist/main\n' > start.sh && chmod +x start.sh
 
 # Expose port
 EXPOSE 3000
