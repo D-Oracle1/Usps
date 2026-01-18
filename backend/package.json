@@ -6,7 +6,7 @@
   "scripts": {
     "prebuild": "rimraf dist",
     "build": "prisma generate && nest build",
-    "start:prod": "prisma db push --accept-data-loss && node dist/main",
+    "start:prod": "echo 'Pushing schema to database...' && prisma db push --accept-data-loss --skip-generate && echo 'Schema push complete!' && node dist/main",
     "vercel-build": "prisma generate && nest build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
