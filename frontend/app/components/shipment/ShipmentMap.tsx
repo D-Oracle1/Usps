@@ -28,7 +28,13 @@ import {
   Clock,
   MapPin,
   Crosshair,
-  Gauge
+  Gauge,
+  Play,
+  Pause,
+  StopCircle,
+  CheckCircle,
+  X,
+  Trash2
 } from 'lucide-react'
 import { useTimeBasedShipmentMovement, type MovementState } from '../../hooks/useTimeBasedShipmentMovement'
 import { haversineDistance, type LatLng } from '../../utils/bearing'
@@ -37,6 +43,7 @@ import { formatDistance, kmhToMph } from '../../utils/etaCalculator'
 interface Props {
   shipment: Shipment
   onMovementStateChange?: () => void
+  onDelete?: () => void
 }
 
 // City coordinates lookup
@@ -307,7 +314,8 @@ function MapContent({
   onMarkerRef,
   onProgressUpdate,
   onMapRef,
-  onDragStateChange
+  onDragStateChange,
+  onTruckClick
 }: {
   origin: L.LatLng
   destination: L.LatLng
@@ -322,6 +330,7 @@ function MapContent({
   onProgressUpdate?: (progress: number) => void
   onMapRef?: (map: L.Map) => void
   onDragStateChange?: (isDragging: boolean) => void
+  onTruckClick?: () => void
 }) {
   const map = useMap()
   const hasInitialized = useRef(false)
@@ -432,6 +441,7 @@ function MapContent({
             dragstart: handleDragStart,
             drag: handleDrag,
             dragend: handleDragEnd,
+            click: () => onTruckClick?.(),
           }}
         />
       )}
@@ -579,7 +589,7 @@ const VEHICLE_SPEED_PRESETS = [
 const mphToKmh = (mph: number) => mph * 1.60934
 
 // Main component
-export default function ShipmentMap({ shipment, onMovementStateChange }: Props) {
+export default function ShipmentMap({ shipment, onMovementStateChange, onDelete }: Props) {
   const [isInfoExpanded, setIsInfoExpanded] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [movementState, setMovementState] = useState<MovementState | null>(null)
@@ -588,8 +598,13 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
   const [followTruck, setFollowTruck] = useState(false)
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
   const [vehicleSpeedKmh, setVehicleSpeedKmh] = useState(105) // Default ~65 mph
+  const [manualSpeedInput, setManualSpeedInput] = useState('')
   const [truckPosition, setTruckPosition] = useState<L.LatLng | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [showTruckModal, setShowTruckModal] = useState(false)
+  const [interceptReason, setInterceptReason] = useState('')
+  const [clearReason, setClearReason] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // Marker ref for imperative updates
   const markerRef = useRef<L.Marker | null>(null)
@@ -716,6 +731,116 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
     setIsDragging(dragging)
   }, [])
 
+  // Handle manual speed input
+  const handleManualSpeedSubmit = useCallback(() => {
+    const speed = parseFloat(manualSpeedInput)
+    if (!isNaN(speed) && speed > 0 && speed <= 120) {
+      const speedKmh = mphToKmh(speed)
+      setVehicleSpeedKmh(speedKmh)
+      movement.setVehicleSpeed(speedKmh)
+      setManualSpeedInput('')
+    }
+  }, [manualSpeedInput, movement])
+
+  // Handle truck marker click
+  const handleTruckClick = useCallback(() => {
+    setShowTruckModal(true)
+  }, [])
+
+  // Handle start movement
+  const handleStartMovement = useCallback(async () => {
+    setIsUpdating(true)
+    try {
+      await api.post(`/movement/${shipment.id}/start`)
+      movement.start()
+      onMovementStateChange?.()
+      setShowTruckModal(false)
+    } catch (error) {
+      console.error('Failed to start movement:', error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [shipment.id, movement, onMovementStateChange])
+
+  // Handle pause movement
+  const handlePauseMovement = useCallback(async () => {
+    setIsUpdating(true)
+    try {
+      await api.post(`/movement/${shipment.id}/pause`)
+      movement.pause()
+      onMovementStateChange?.()
+      setShowTruckModal(false)
+    } catch (error) {
+      console.error('Failed to pause movement:', error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [shipment.id, movement, onMovementStateChange])
+
+  // Handle resume movement
+  const handleResumeMovement = useCallback(async () => {
+    setIsUpdating(true)
+    try {
+      await api.post(`/movement/${shipment.id}/resume`)
+      movement.resume()
+      onMovementStateChange?.()
+      setShowTruckModal(false)
+    } catch (error) {
+      console.error('Failed to resume movement:', error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [shipment.id, movement, onMovementStateChange])
+
+  // Handle intercept
+  const handleIntercept = useCallback(async () => {
+    if (!interceptReason.trim()) return
+    setIsUpdating(true)
+    try {
+      await api.post(`/shipments/${shipment.id}/intercept`, { reason: interceptReason })
+      movement.pause()
+      onMovementStateChange?.()
+      setShowTruckModal(false)
+      setInterceptReason('')
+    } catch (error) {
+      console.error('Failed to intercept:', error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [shipment.id, interceptReason, movement, onMovementStateChange])
+
+  // Handle clear
+  const handleClear = useCallback(async () => {
+    if (!clearReason.trim()) return
+    setIsUpdating(true)
+    try {
+      await api.post(`/shipments/${shipment.id}/clear`, { reason: clearReason })
+      movement.resume()
+      onMovementStateChange?.()
+      setShowTruckModal(false)
+      setClearReason('')
+    } catch (error) {
+      console.error('Failed to clear:', error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [shipment.id, clearReason, movement, onMovementStateChange])
+
+  // Handle delete shipment
+  const handleDelete = useCallback(async () => {
+    setIsUpdating(true)
+    try {
+      await api.delete(`/shipments/${shipment.id}`)
+      setShowDeleteConfirm(false)
+      setShowTruckModal(false)
+      onDelete?.()
+    } catch (error) {
+      console.error('Failed to delete shipment:', error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [shipment.id, onDelete])
+
   // Handle location update from marker drag (with route snapping)
   const handleLocationUpdate = useCallback(async (lat: number, lng: number, progress: number) => {
     setIsUpdating(true)
@@ -784,6 +909,7 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
           onMarkerRef={handleMarkerRef}
           onMapRef={handleMapRef}
           onDragStateChange={handleDragStateChange}
+          onTruckClick={handleTruckClick}
         />
       </MapContainer>
 
@@ -843,7 +969,27 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
                 </button>
               ))}
             </div>
-            <div className="mt-2 text-xs text-blue-600 text-center font-medium">
+            {/* Manual speed input */}
+            <div className="mt-2 flex items-center gap-1">
+              <input
+                type="number"
+                value={manualSpeedInput}
+                onChange={(e) => setManualSpeedInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleManualSpeedSubmit()}
+                placeholder="Custom mph"
+                min="1"
+                max="120"
+                className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleManualSpeedSubmit}
+                disabled={!manualSpeedInput}
+                className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Set
+              </button>
+            </div>
+            <div className="mt-1 text-xs text-blue-600 text-center font-medium">
               {Math.round(kmhToMph(vehicleSpeedKmh))} mph
             </div>
           </div>
@@ -934,6 +1080,157 @@ export default function ShipmentMap({ shipment, onMovementStateChange }: Props) 
           </div>
         </div>
       </div>
+
+      {/* Truck Control Modal */}
+      {showTruckModal && (
+        <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-lg shadow-xl w-80 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Shipment Controls</h3>
+              <button
+                onClick={() => setShowTruckModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-4">
+              {/* Movement Controls */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Movement</p>
+                <div className="flex flex-wrap gap-2">
+                  {!movement.isMoving() && movementState && !movementState.hasArrived && (
+                    <button
+                      onClick={handleStartMovement}
+                      disabled={isUpdating}
+                      className="flex items-center space-x-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+                    >
+                      <Play className="w-4 h-4" />
+                      <span>Start</span>
+                    </button>
+                  )}
+                  {movement.isMoving() && (
+                    <button
+                      onClick={handlePauseMovement}
+                      disabled={isUpdating}
+                      className="flex items-center space-x-1 px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 text-sm"
+                    >
+                      <Pause className="w-4 h-4" />
+                      <span>Pause</span>
+                    </button>
+                  )}
+                  {isPaused && movementState && !movementState.hasArrived && (
+                    <button
+                      onClick={handleResumeMovement}
+                      disabled={isUpdating}
+                      className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+                    >
+                      <Play className="w-4 h-4" />
+                      <span>Resume</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Intercept */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Intercept Shipment</p>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={interceptReason}
+                    onChange={(e) => setInterceptReason(e.target.value)}
+                    placeholder="Reason for interception..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <button
+                    onClick={handleIntercept}
+                    disabled={isUpdating || !interceptReason.trim()}
+                    className="flex items-center space-x-1 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 text-sm w-full justify-center"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Intercept</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Clear */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Clear Shipment</p>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={clearReason}
+                    onChange={(e) => setClearReason(e.target.value)}
+                    placeholder="Clearance notes..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <button
+                    onClick={handleClear}
+                    disabled={isUpdating || !clearReason.trim()}
+                    className="flex items-center space-x-1 px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 text-sm w-full justify-center"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Clear</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-gray-200 my-2"></div>
+
+              {/* Delete */}
+              <div>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex items-center space-x-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm w-full justify-center"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Shipment</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="absolute inset-0 z-[3000] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl w-80 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Shipment</h3>
+                <p className="text-sm text-gray-500">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 mb-4">
+              Are you sure you want to delete shipment <strong>{shipment.trackingNumber}</strong>?
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isUpdating}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {isUpdating ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

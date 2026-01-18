@@ -45,8 +45,6 @@ export default function PublicTrackingMapPage() {
   const [events, setEvents] = useState<TrackingEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [animatedPosition, setAnimatedPosition] = useState<[number, number]>([39.8283, -98.5795])
-  const [bearing, setBearing] = useState(0)
   const [originPosition, setOriginPosition] = useState<[number, number] | null>(null)
   const [destPosition, setDestPosition] = useState<[number, number] | null>(null)
   const [route, setRoute] = useState<Array<[number, number]>>([])
@@ -57,6 +55,11 @@ export default function PublicTrackingMapPage() {
   const [movementReady, setMovementReady] = useState(false)
   const [initialProgress, setInitialProgress] = useState(0)
   const [tripDurationMs, setTripDurationMs] = useState(60000) // Default 1 minute for demo
+
+  // Use refs for smooth animation (no React re-renders)
+  const animatedPositionRef = useRef<[number, number]>([39.8283, -98.5795])
+  const bearingRef = useRef(0)
+  const truckMarkerRef = useRef<any>(null)
 
   // Interception state
   const [isIntercepted, setIsIntercepted] = useState(false)
@@ -70,10 +73,18 @@ export default function PublicTrackingMapPage() {
   // Average speed for demo purposes (km/h) - adjust for faster/slower demo
   const DEMO_SPEED_KMH = 80
 
-  // Movement state callback - updates position imperatively
+  // Movement state callback - updates position IMPERATIVELY (no React state for position)
   const handlePositionUpdate = useCallback((state: MovementState) => {
-    setAnimatedPosition([state.position.lat, state.position.lng])
-    setBearing(state.bearing)
+    // Store in refs (no re-render)
+    animatedPositionRef.current = [state.position.lat, state.position.lng]
+    bearingRef.current = state.bearing
+
+    // IMPERATIVE: Update marker position directly (smooth, no jitter)
+    if (truckMarkerRef.current) {
+      truckMarkerRef.current.setLatLng([state.position.lat, state.position.lng])
+    }
+
+    // Only update these occasionally to reduce re-renders
     setProgress(state.progress * 100)
     setSpeed(state.speed)
   }, [])
@@ -178,7 +189,7 @@ export default function PublicTrackingMapPage() {
           // Set initial position and progress
           if (shipmentData.currentLocation && shipmentData.currentLocation.includes(',')) {
             const [lat, lng] = shipmentData.currentLocation.split(',').map(Number)
-            setAnimatedPosition([lat, lng])
+            animatedPositionRef.current = [lat, lng]
 
             // Calculate current progress along route
             const originDist = haversineDistance(
@@ -188,7 +199,7 @@ export default function PublicTrackingMapPage() {
             const currentProgress = Math.min(0.95, originDist / totalDistance)
             setInitialProgress(currentProgress)
           } else {
-            setAnimatedPosition([originCoords.lat, originCoords.lng])
+            animatedPositionRef.current = [originCoords.lat, originCoords.lng]
             setInitialProgress(0)
           }
 
@@ -238,7 +249,11 @@ export default function PublicTrackingMapPage() {
       if (data.isIntercepted && data.interceptLocation?.latitude && data.interceptLocation?.longitude) {
         const lat = data.interceptLocation.latitude
         const lng = data.interceptLocation.longitude
-        setAnimatedPosition([lat, lng])
+        animatedPositionRef.current = [lat, lng]
+        // Update marker imperatively
+        if (truckMarkerRef.current) {
+          truckMarkerRef.current.setLatLng([lat, lng])
+        }
         // Seek the movement to this position
         if (movement) {
           const currentState = movement.getState()
@@ -273,9 +288,12 @@ export default function PublicTrackingMapPage() {
       // Store intercept location for display
       if (data.location) {
         setInterceptLocation(data.location)
-        // Set the animated position to the intercept location
+        // Set the animated position to the intercept location imperatively
         if (data.location.latitude && data.location.longitude) {
-          setAnimatedPosition([data.location.latitude, data.location.longitude])
+          animatedPositionRef.current = [data.location.latitude, data.location.longitude]
+          if (truckMarkerRef.current) {
+            truckMarkerRef.current.setLatLng([data.location.latitude, data.location.longitude])
+          }
         }
       }
     })
@@ -428,13 +446,14 @@ export default function PublicTrackingMapPage() {
     return colors[status] || 'bg-gray-100 text-gray-800'
   }
 
-  // Map content component
+  // Map content component with IMPERATIVE marker updates for smooth animation
   const MapContent = useCallback(() => {
     const [L, setL] = useState<any>(null)
     const [truckIcon, setTruckIcon] = useState<any>(null)
     const [originIcon, setOriginIcon] = useState<any>(null)
     const [destIcon, setDestIcon] = useState<any>(null)
     const [MapHook, setMapHook] = useState<any>(null)
+    const [initialPosition] = useState<[number, number]>(animatedPositionRef.current)
 
     useEffect(() => {
       import('leaflet').then((leaflet) => {
@@ -443,11 +462,18 @@ export default function PublicTrackingMapPage() {
         setTruckIcon(leaflet.default.divIcon({
           className: 'truck-marker',
           html: `
-            <div style="width:44px;height:44px;background:linear-gradient(135deg,#333366 0%,#1a1a4e 100%);border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+            <div style="width:44px;height:44px;background:linear-gradient(135deg,#333366 0%,#1a1a4e 100%);border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.4);animation:pulse 2s infinite;">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                 <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
               </svg>
             </div>
+            <style>
+              @keyframes pulse {
+                0% { box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+                50% { box-shadow: 0 4px 20px rgba(51,51,102,0.6); }
+                100% { box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+              }
+            </style>
           `,
           iconSize: [44, 44],
           iconAnchor: [22, 22],
@@ -473,28 +499,48 @@ export default function PublicTrackingMapPage() {
       })
     }, [])
 
+    // Map controller that handles smooth panning without jitter
     function MapController() {
       const map = MapHook ? MapHook() : null
       const lastPanRef = useRef<[number, number] | null>(null)
+      const panIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
       useEffect(() => {
-        if (map && animatedPosition) {
-          // Only pan if we've moved significantly (reduces jitter)
+        if (!map) return
+
+        // Pan to truck position periodically (not on every frame)
+        panIntervalRef.current = setInterval(() => {
+          const currentPos = animatedPositionRef.current
           const lastPan = lastPanRef.current
+
+          // Only pan if we've moved significantly (reduces jitter)
           if (lastPan) {
-            const latDiff = Math.abs(animatedPosition[0] - lastPan[0])
-            const lngDiff = Math.abs(animatedPosition[1] - lastPan[1])
-            // Only pan if moved more than ~100 meters
-            if (latDiff < 0.001 && lngDiff < 0.001) {
+            const latDiff = Math.abs(currentPos[0] - lastPan[0])
+            const lngDiff = Math.abs(currentPos[1] - lastPan[1])
+            // Only pan if moved more than ~500 meters
+            if (latDiff < 0.005 && lngDiff < 0.005) {
               return
             }
           }
-          lastPanRef.current = animatedPosition
-          map.panTo(animatedPosition, { animate: true, duration: 0.8, easeLinearity: 0.5 })
+
+          lastPanRef.current = currentPos
+          map.panTo(currentPos, { animate: true, duration: 1.0, easeLinearity: 0.25 })
+        }, 2000) // Pan every 2 seconds instead of every frame
+
+        return () => {
+          if (panIntervalRef.current) {
+            clearInterval(panIntervalRef.current)
+          }
         }
-      }, [map, animatedPosition])
+      }, [map])
+
       return null
     }
+
+    // Store marker ref for imperative updates
+    const handleMarkerRef = useCallback((ref: any) => {
+      truckMarkerRef.current = ref
+    }, [])
 
     if (!L || !truckIcon) {
       return <div className="h-full flex items-center justify-center bg-gray-100">Loading map...</div>
@@ -511,14 +557,12 @@ export default function PublicTrackingMapPage() {
         )}
         {originPosition && <Marker position={originPosition} icon={originIcon} />}
         {destPosition && <Marker position={destPosition} icon={destIcon} />}
-        <Marker position={animatedPosition} icon={truckIcon} />
-        {isMoving && (
-          <Circle center={animatedPosition} radius={500} pathOptions={{ color: '#333366', fillColor: '#333366', fillOpacity: 0.1, weight: 2 }} />
-        )}
+        {/* Truck marker with ref for imperative updates - position set via ref, not state */}
+        <Marker position={initialPosition} icon={truckIcon} ref={handleMarkerRef} />
         {MapHook && <MapController />}
       </>
     )
-  }, [animatedPosition, route, originPosition, destPosition, isMoving])
+  }, [route, originPosition, destPosition])
 
   if (isLoading) {
     return (
@@ -569,7 +613,7 @@ export default function PublicTrackingMapPage() {
       <div className="h-[60vh] relative">
         {mapReady && (
           <MapContainer
-            center={animatedPosition}
+            center={animatedPositionRef.current}
             zoom={6}
             style={{ height: '100%', width: '100%' }}
             scrollWheelZoom={true}
