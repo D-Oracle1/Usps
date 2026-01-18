@@ -18,9 +18,9 @@ COPY backend/ .
 # Build the application
 RUN npm run build
 
-# Copy the start script
+# Copy the start script and fix line endings (Windows CRLF -> Unix LF)
 COPY backend/start.sh ./start.sh
-RUN chmod +x start.sh
+RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
 
 # Keep prisma for db push at runtime
 # Remove other devDependencies after build (but keep prisma)
