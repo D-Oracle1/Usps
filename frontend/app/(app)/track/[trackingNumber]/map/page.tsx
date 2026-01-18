@@ -111,7 +111,7 @@ export default function PublicTrackingMapPage() {
       destination: { lat: destPosition[0], lng: destPosition[1] },
       route: routeLatLng.length > 1 ? routeLatLng : undefined,
       durationMs: tripDurationMs,
-      averageSpeedKmh: DEMO_SPEED_KMH,
+      averageSpeedKmh: vehicleSpeedKmh,
       initialProgress: initialProgress,
       startPaused: !isMoving || isIntercepted,
       onPositionUpdate: handlePositionUpdate,
