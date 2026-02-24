@@ -106,6 +106,36 @@ export class TrackingService {
       throw new NotFoundException('Shipment not found');
     }
 
+    // Lazily compute and persist current progress so reconnecting clients get an accurate position
+    const ms = shipment.movementState;
+    if (
+      ms &&
+      ms.isMoving &&
+      ms.progressUpdatedAt &&
+      ms.currentProgress < 1 &&
+      shipment.totalDistance &&
+      shipment.totalDistance > 0
+    ) {
+      const elapsedHours = (Date.now() - ms.progressUpdatedAt.getTime()) / 3_600_000;
+      const newProgress = Math.min(
+        1,
+        ms.currentProgress + (elapsedHours * ms.vehicleSpeedKmh) / shipment.totalDistance,
+      );
+
+      if (newProgress > ms.currentProgress) {
+        await this.prisma.shipmentMovementState.update({
+          where: { shipmentId: shipment.id },
+          data: {
+            currentProgress: newProgress,
+            progressUpdatedAt: new Date(),
+          },
+        });
+        // Reflect updated progress in the returned object without a second DB round-trip
+        (shipment as any).movementState.currentProgress = newProgress;
+        (shipment as any).movementState.progressUpdatedAt = new Date();
+      }
+    }
+
     const events = await this.prisma.trackingEvent.findMany({
       where: { shipmentId: shipment.id },
       orderBy: {

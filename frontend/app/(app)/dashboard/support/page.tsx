@@ -15,7 +15,7 @@ import {
   RefreshCw
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
-import { getSupportSocket, disconnectSupportSocket } from '@/lib/support-socket'
+import { subscribeToChannel, unsubscribeFromChannel, isPusherConnected } from '@/lib/support-socket'
 import { Conversation, Message, ChatStatistics } from '@/lib/support-types'
 import api from '@/lib/api'
 
@@ -64,34 +64,37 @@ export default function AdminSupportPage() {
     loadStatistics()
   }, [])
 
-  // Setup WebSocket - separate effect to avoid stale closures
+  // Subscribe to admin-broadcast channel for global events
   useEffect(() => {
-    if (!token) return
+    const channel = subscribeToChannel('admin-broadcast')
+    setIsConnected(isPusherConnected())
 
-    const socket = getSupportSocket(token)
+    channel.bind('conversation-updated', () => {
+      loadConversations()
+      loadStatistics()
+    })
+    channel.bind('user-online', () => loadConversations())
+    channel.bind('user-offline', () => loadConversations())
 
-    const handleConnect = () => {
-      setIsConnected(true)
-      // Rejoin conversation room if we have one
-      if (activeConversationRef.current) {
-        socket.emit('joinConversation', { conversationId: activeConversationRef.current })
-      }
+    return () => {
+      channel.unbind('conversation-updated')
+      channel.unbind('user-online')
+      channel.unbind('user-offline')
+      unsubscribeFromChannel('admin-broadcast')
     }
+  }, [])
 
-    const handleDisconnect = () => {
-      setIsConnected(false)
-    }
+  // Subscribe to per-conversation channel for message events
+  useEffect(() => {
+    if (!activeConversation) return
+
+    const channelName = `conversation-${activeConversation.id}`
+    const channel = subscribeToChannel(channelName)
 
     const handleNewMessage = (message: Message) => {
-      // Update messages if in active conversation
-      if (activeConversationRef.current && message.conversationId === activeConversationRef.current) {
+      if (activeConversationRef.current === message.conversationId) {
         setMessages(prev => {
-          // Prevent duplicates - check by ID
-          if (prev.some(m => m.id === message.id)) {
-            return prev
-          }
-          // Also check if this is our own message that we added optimistically
-          // (optimistic messages have temp-* IDs, but same content)
+          if (prev.some(m => m.id === message.id)) return prev
           if (message.senderType === 'ADMIN') {
             const hasSimilarOptimistic = prev.some(m =>
               m.id.startsWith('temp-') &&
@@ -99,7 +102,6 @@ export default function AdminSupportPage() {
               m.senderType === 'ADMIN'
             )
             if (hasSimilarOptimistic) {
-              // Replace the optimistic message with the real one
               return prev.map(m =>
                 m.id.startsWith('temp-') && m.content === message.content && m.senderType === 'ADMIN'
                   ? message
@@ -110,13 +112,13 @@ export default function AdminSupportPage() {
           return [...prev, message]
         })
       }
-      // Refresh conversation list
       loadConversations()
       loadStatistics()
     }
 
     const handleUserTyping = (data: { conversationId: string; isTyping: boolean; userType: string }) => {
-      if (activeConversationRef.current === data.conversationId && data.userType !== 'admin') {
+      if (activeConversationRef.current === data.conversationId &&
+          data.userType !== 'admin' && data.userType !== 'ADMIN') {
         setIsTyping(data.isTyping)
       }
     }
@@ -129,30 +131,17 @@ export default function AdminSupportPage() {
       }
     }
 
-    socket.on('connect', handleConnect)
-    socket.on('disconnect', handleDisconnect)
-    socket.on('newMessage', handleNewMessage)
-    socket.on('userTyping', handleUserTyping)
-    socket.on('messagesRead', handleMessagesRead)
-    socket.on('userOnline', () => loadConversations())
-    socket.on('userOffline', () => loadConversations())
-    socket.on('conversationUpdated', () => loadConversations())
-
-    if (socket.connected) {
-      setIsConnected(true)
-    }
+    channel.bind('new-message', handleNewMessage)
+    channel.bind('user-typing', handleUserTyping)
+    channel.bind('messages-read', handleMessagesRead)
 
     return () => {
-      socket.off('connect', handleConnect)
-      socket.off('disconnect', handleDisconnect)
-      socket.off('newMessage', handleNewMessage)
-      socket.off('userTyping', handleUserTyping)
-      socket.off('messagesRead', handleMessagesRead)
-      socket.off('userOnline')
-      socket.off('userOffline')
-      socket.off('conversationUpdated')
+      channel.unbind('new-message', handleNewMessage)
+      channel.unbind('user-typing', handleUserTyping)
+      channel.unbind('messages-read', handleMessagesRead)
+      unsubscribeFromChannel(channelName)
     }
-  }, [token])
+  }, [activeConversation?.id])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -187,12 +176,8 @@ export default function AdminSupportPage() {
       const response = await api.get(`/support/admin/conversations/${conv.id}/messages`)
       setMessages(response.data.messages || [])
 
-      // Join WebSocket room and mark as read
-      if (token) {
-        const socket = getSupportSocket(token)
-        socket.emit('joinConversation', { conversationId: conv.id })
-        socket.emit('markAsRead', { conversationId: conv.id })
-      }
+      // Mark as read via REST
+      api.post(`/support/admin/conversations/${conv.id}/read`, {}).catch(() => {/* non-critical */})
     } catch (error) {
       console.error('Failed to load messages:', error)
     }
@@ -231,10 +216,6 @@ export default function AdminSupportPage() {
         m.id === optimisticMessage.id ? response.data : m
       ))
 
-      // Also emit via WebSocket for real-time sync to user
-      const socket = getSupportSocket(token)
-      socket.emit('typing', { conversationId: activeConversation.id, isTyping: false })
-
       // Refresh conversation list
       loadConversations()
     } catch (error) {
@@ -249,16 +230,21 @@ export default function AdminSupportPage() {
   }, [newMessage, activeConversation, token, user, isSending])
 
   const handleTyping = useCallback(() => {
-    if (!activeConversation || !token) return
+    if (!activeConversation) return
 
-    const socket = getSupportSocket(token)
-    socket.emit('typing', { conversationId: activeConversation.id, isTyping: true })
+    api.post(
+      `/support/admin/conversations/${activeConversation.id}/typing`,
+      { isTyping: true },
+    ).catch(() => {/* non-critical */})
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typing', { conversationId: activeConversation.id, isTyping: false })
+      api.post(
+        `/support/admin/conversations/${activeConversation.id}/typing`,
+        { isTyping: false },
+      ).catch(() => {/* non-critical */})
     }, 2000)
-  }, [activeConversation, token])
+  }, [activeConversation])
 
   const updateStatus = async (status: string) => {
     if (!activeConversation) return

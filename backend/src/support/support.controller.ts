@@ -15,7 +15,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { SupportService } from './support.service';
-import { SupportGateway } from './support.gateway';
+import { PusherService } from '../pusher/pusher.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SupportJwtAuthGuard } from './guards/support-jwt.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -28,7 +28,7 @@ export class SupportController {
 
   constructor(
     private supportService: SupportService,
-    private supportGateway: SupportGateway,
+    private pusherService: PusherService,
   ) {}
 
   /**
@@ -228,17 +228,14 @@ export class SupportController {
         SenderType.USER,
       );
 
-      // Emit via WebSocket for real-time updates (if server is available)
-      if (this.supportGateway?.server) {
-        this.supportGateway.server.to(`conversation:${conversationId}`).emit('newMessage', {
-          ...message,
-          conversationId,
-        });
-        this.supportGateway.server.to('admin-room').emit('conversationUpdated', {
-          conversationId,
-          lastMessage: message,
-        });
-      }
+      await this.pusherService.trigger(`conversation-${conversationId}`, 'new-message', {
+        ...message,
+        conversationId,
+      });
+      await this.pusherService.trigger('admin-broadcast', 'conversation-updated', {
+        conversationId,
+        lastMessage: message,
+      });
 
       this.logger.log(`Message sent: ${message.id}`);
       return message;
@@ -262,6 +259,14 @@ export class SupportController {
 
     try {
       const result = await this.supportService.markMessagesAsRead(id, userId, 'support_user');
+
+      await this.pusherService.trigger(`conversation-${id}`, 'messages-read', {
+        conversationId: id,
+        readBy: userId,
+        readByType: 'support_user',
+        readAt: new Date(),
+      });
+
       return result;
     } catch (error) {
       this.logger.error(`Failed to mark messages as read: ${error.message}`, error.stack);
@@ -273,6 +278,26 @@ export class SupportController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  @Post('conversations/:id/typing')
+  @UseGuards(SupportJwtAuthGuard)
+  async userTyping(
+    @Request() req,
+    @Param('id') conversationId: string,
+    @Body() body: { isTyping: boolean },
+  ) {
+    const userId = this.validateSupportUserAuth(req, `POST /support/conversations/${conversationId}/typing`);
+    this.validateConversationId(conversationId);
+
+    await this.pusherService.trigger(`conversation-${conversationId}`, 'user-typing', {
+      conversationId,
+      userId,
+      userType: 'support_user',
+      isTyping: body?.isTyping ?? false,
+    });
+
+    return { ok: true };
   }
 
   // ============ Admin Endpoints (Admin Auth) ============
@@ -376,13 +401,10 @@ export class SupportController {
         SenderType.ADMIN,
       );
 
-      // Emit via WebSocket for real-time updates
-      if (this.supportGateway?.server) {
-        this.supportGateway.server.to(`conversation:${conversationId}`).emit('newMessage', {
-          ...message,
-          conversationId,
-        });
-      }
+      await this.pusherService.trigger(`conversation-${conversationId}`, 'new-message', {
+        ...message,
+        conversationId,
+      });
 
       this.logger.log(`Admin message sent: ${message.id}`);
       return message;
@@ -407,6 +429,14 @@ export class SupportController {
 
     try {
       const result = await this.supportService.markMessagesAsRead(id, userId, 'admin');
+
+      await this.pusherService.trigger(`conversation-${id}`, 'messages-read', {
+        conversationId: id,
+        readBy: userId,
+        readByType: 'admin',
+        readAt: new Date(),
+      });
+
       return result;
     } catch (error) {
       this.logger.error(`Failed to mark messages as read: ${error.message}`, error.stack);
@@ -418,6 +448,27 @@ export class SupportController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  @Post('admin/conversations/:id/typing')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('USER', 'ADMIN', 'SUPER_ADMIN')
+  async adminTyping(
+    @Request() req,
+    @Param('id') conversationId: string,
+    @Body() body: { isTyping: boolean },
+  ) {
+    const userId = this.validateAdminAuth(req, `POST /support/admin/conversations/${conversationId}/typing`);
+    this.validateConversationId(conversationId);
+
+    await this.pusherService.trigger(`conversation-${conversationId}`, 'user-typing', {
+      conversationId,
+      userId,
+      userType: 'admin',
+      isTyping: body?.isTyping ?? false,
+    });
+
+    return { ok: true };
   }
 
   @Patch('admin/conversations/:id/assign')

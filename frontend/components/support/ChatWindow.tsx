@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Package, Plus, ArrowLeft, RefreshCw } from 'lucide-react'
 import { useSupportAuth } from '@/lib/support-auth-context'
-import { getSupportSocket, disconnectSupportSocket } from '@/lib/support-socket'
+import { subscribeToChannel, unsubscribeFromChannel, isPusherConnected } from '@/lib/support-socket'
 import { Conversation, Message } from '@/lib/support-types'
 import MessageBubble from './MessageBubble'
 import TypingIndicator from './TypingIndicator'
@@ -36,49 +36,33 @@ export default function ChatWindow() {
     }
   }, [token])
 
-  // Setup WebSocket - this effect handles socket connection and event listeners
+  // Subscribe to Pusher for the active conversation
   useEffect(() => {
-    if (!token) return
+    if (!activeConversation) return
 
-    const socket = getSupportSocket(token)
+    const channelName = `conversation-${activeConversation.id}`
+    const channel = subscribeToChannel(channelName)
 
-    const handleConnect = () => {
-      setIsConnected(true)
-      // Rejoin conversation room if we have an active conversation
-      if (activeConversationRef.current) {
-        socket.emit('joinConversation', { conversationId: activeConversationRef.current })
-      }
-    }
-
-    const handleDisconnect = () => {
-      setIsConnected(false)
-    }
+    setIsConnected(isPusherConnected())
 
     const handleNewMessage = (message: Message) => {
-      // Check using ref to avoid stale closure
-      if (activeConversationRef.current && message.conversationId === activeConversationRef.current) {
+      if (activeConversationRef.current === message.conversationId) {
         setMessages(prev => {
-          // Prevent duplicate messages
-          if (prev.some(m => m.id === message.id)) {
-            return prev
-          }
+          if (prev.some(m => m.id === message.id)) return prev
           return [...prev, message]
         })
       }
-      // Refresh conversations list to show latest message preview
       loadConversations()
     }
 
     const handleUserTyping = (data: { conversationId: string; isTyping: boolean; userType: string }) => {
-      // Only show typing indicator for admin messages in the active conversation
       if (activeConversationRef.current === data.conversationId &&
-          (data.userType === 'ADMIN' || data.userType === 'admin')) {
+          (data.userType === 'admin' || data.userType === 'ADMIN')) {
         setIsTyping(data.isTyping)
       }
     }
 
     const handleMessagesRead = (data: { conversationId: string; readByType: string }) => {
-      // Update read status when admin reads our messages
       if (activeConversationRef.current === data.conversationId && data.readByType === 'admin') {
         setMessages(prev => prev.map(m =>
           m.senderType === 'USER' ? { ...m, isRead: true } : m
@@ -86,26 +70,17 @@ export default function ChatWindow() {
       }
     }
 
-    // Set up listeners
-    socket.on('connect', handleConnect)
-    socket.on('disconnect', handleDisconnect)
-    socket.on('newMessage', handleNewMessage)
-    socket.on('userTyping', handleUserTyping)
-    socket.on('messagesRead', handleMessagesRead)
-
-    // Check if already connected
-    if (socket.connected) {
-      setIsConnected(true)
-    }
+    channel.bind('new-message', handleNewMessage)
+    channel.bind('user-typing', handleUserTyping)
+    channel.bind('messages-read', handleMessagesRead)
 
     return () => {
-      socket.off('connect', handleConnect)
-      socket.off('disconnect', handleDisconnect)
-      socket.off('newMessage', handleNewMessage)
-      socket.off('userTyping', handleUserTyping)
-      socket.off('messagesRead', handleMessagesRead)
+      channel.unbind('new-message', handleNewMessage)
+      channel.unbind('user-typing', handleUserTyping)
+      channel.unbind('messages-read', handleMessagesRead)
+      unsubscribeFromChannel(channelName)
     }
-  }, [token])
+  }, [activeConversation?.id])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -119,7 +94,6 @@ export default function ChatWindow() {
       })
       setConversations(response.data)
 
-      // If no active conversation and there are conversations, open the first one
       if (response.data.length > 0 && !activeConversation) {
         selectConversation(response.data[0])
       } else if (response.data.length === 0) {
@@ -142,44 +116,63 @@ export default function ChatWindow() {
       })
       setMessages(response.data.messages || [])
 
-      // Join WebSocket room
-      const socket = getSupportSocket(token!)
-      socket.emit('joinConversation', { conversationId: conv.id })
-      socket.emit('markAsRead', { conversationId: conv.id })
+      // Mark as read via REST
+      await api.post(`/support/conversations/${conv.id}/read`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {/* non-critical */})
     } catch (error) {
       console.error('Failed to load messages:', error)
     }
   }
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (!newMessage.trim() || !activeConversation || !token) return
 
-    const socket = getSupportSocket(token)
-    socket.emit('sendMessage', {
-      conversationId: activeConversation.id,
-      content: newMessage.trim(),
-    })
-
+    const content = newMessage.trim()
     setNewMessage('')
 
+    try {
+      const response = await api.post(
+        `/support/conversations/${activeConversation.id}/messages`,
+        { content },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      // Optimistically add message (server will also broadcast via Pusher, deduplication handles it)
+      setMessages(prev => {
+        if (prev.some(m => m.id === response.data.id)) return prev
+        return [...prev, response.data]
+      })
+    } catch (error) {
+      console.error('Failed to send message:', error)
+    }
+
     // Clear typing indicator
-    socket.emit('typing', { conversationId: activeConversation.id, isTyping: false })
+    api.post(
+      `/support/conversations/${activeConversation.id}/typing`,
+      { isTyping: false },
+      { headers: { Authorization: `Bearer ${token}` } },
+    ).catch(() => {/* non-critical */})
   }, [newMessage, activeConversation, token])
 
   const handleTyping = useCallback(() => {
     if (!activeConversation || !token) return
 
-    const socket = getSupportSocket(token)
-    socket.emit('typing', { conversationId: activeConversation.id, isTyping: true })
+    api.post(
+      `/support/conversations/${activeConversation.id}/typing`,
+      { isTyping: true },
+      { headers: { Authorization: `Bearer ${token}` } },
+    ).catch(() => {/* non-critical */})
 
-    // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current)
     }
 
-    // Set timeout to stop typing indicator
     typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typing', { conversationId: activeConversation.id, isTyping: false })
+      api.post(
+        `/support/conversations/${activeConversation.id}/typing`,
+        { isTyping: false },
+        { headers: { Authorization: `Bearer ${token}` } },
+      ).catch(() => {/* non-critical */})
     }, 2000)
   }, [activeConversation, token])
 
@@ -283,8 +276,8 @@ export default function ChatWindow() {
       {conversations.length > 1 && (
         <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <div className="flex items-center flex-1">
-            <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
-                 title={isConnected ? 'Connected' : 'Disconnected'} />
+            <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-500' : 'bg-yellow-500'}`}
+                 title={isConnected ? 'Connected' : 'Connecting...'} />
             <select
               value={activeConversation?.id || ''}
               onChange={(e) => {

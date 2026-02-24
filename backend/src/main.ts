@@ -43,14 +43,7 @@ async function bootstrap() {
   try {
     await app.listen(port, '0.0.0.0');
 
-    logger.log(`
-    ┌─────────────────────────────────────────┐
-    │  Courier Tracking System - Backend API  │
-    │  Server running on port: ${port}             │
-    │  WebSocket: ws://0.0.0.0:${port}/tracking   │
-    │  Environment: ${process.env.NODE_ENV || 'development'}
-    └─────────────────────────────────────────┘
-    `);
+    logger.log(`Courier Tracking System API running on port ${port} (${process.env.NODE_ENV || 'development'})`);
   } catch (error) {
     logger.error(`Failed to start server: ${error.message}`, error.stack);
     process.exit(1);

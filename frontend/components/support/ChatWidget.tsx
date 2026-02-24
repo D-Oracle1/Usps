@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { MessageCircle, X, Minimize2, Maximize2, LogOut } from 'lucide-react'
 import { useSupportAuth } from '@/lib/support-auth-context'
 import { useAuth } from '@/lib/auth-context'
-import { getSupportSocket } from '@/lib/support-socket'
+import { subscribeToChannel, unsubscribeFromChannel } from '@/lib/support-socket'
 import ChatAuthModal from './ChatAuthModal'
 import ChatWindow from './ChatWindow'
 
@@ -48,11 +48,11 @@ export default function ChatWidget() {
     }
   }, [isOpen, isMinimized])
 
-  // Listen for new messages via WebSocket when user is logged in but chat is closed
+  // Listen for new messages via Pusher when user is logged in but chat is closed
   useEffect(() => {
-    if (!token || !user) return
+    if (!user) return
 
-    const socket = getSupportSocket(token)
+    const channel = subscribeToChannel('admin-broadcast')
 
     const handleNewMessage = (message: any) => {
       // Only count messages from admin when chat is closed or minimized
@@ -61,12 +61,13 @@ export default function ChatWidget() {
       }
     }
 
-    socket.on('newMessage', handleNewMessage)
+    channel.bind('new-message', handleNewMessage)
 
     return () => {
-      socket.off('newMessage', handleNewMessage)
+      channel.unbind('new-message', handleNewMessage)
+      unsubscribeFromChannel('admin-broadcast')
     }
-  }, [token, user, isOpen, isMinimized])
+  }, [user, isOpen, isMinimized])
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.stopPropagation()

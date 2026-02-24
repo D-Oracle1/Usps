@@ -331,7 +331,7 @@ export class MovementService {
     const calculatedSpeed = totalDistance / deliveryHours; // km/h
     const travelTimeMinutes = deliveryHours * 60;
 
-    // Update shipment status with distance and ETA
+    // Update shipment status with distance, ETA, and route (required for client-side position calculation)
     await this.prisma.shipment.update({
       where: { id: shipmentId },
       data: {
@@ -341,6 +341,7 @@ export class MovementService {
         estimatedArrival: eta,
         tripStartedAt: new Date(),
         averageSpeed: calculatedSpeed,
+        route: route as any,
       },
     });
 
@@ -374,8 +375,16 @@ export class MovementService {
       },
     });
 
-    // Start the simulation with distance tracking and delivery duration
-    this.trackingGateway.startRouteSimulation(shipmentId, route, totalDistance, deliveryDays);
+    // Notify connected clients that the trip has started so they can begin client-side animation
+    this.trackingGateway.emitLocationUpdate(shipmentId, {
+      tripStarted: true,
+      route,
+      totalDistance,
+      estimatedArrival: eta,
+      vehicleSpeedKmh: calculatedSpeed,
+      originLat: originCoords.lat,
+      originLng: originCoords.lng,
+    });
 
     return {
       message: 'Trip started successfully',
@@ -577,9 +586,6 @@ export class MovementService {
     if (shipment.currentStatus === 'CANCELLED') {
       throw new BadRequestException('Shipment is already cancelled');
     }
-
-    // Stop any active simulation
-    this.trackingGateway.stopSimulation(shipmentId);
 
     // Update shipment status
     await this.prisma.shipment.update({
@@ -813,13 +819,11 @@ export class MovementService {
       },
     });
 
-    // Stop current simulation and restart with new route
-    this.trackingGateway.stopSimulation(shipmentId);
-    this.trackingGateway.startRouteSimulation(
-      shipmentId,
-      newRoute,
-      newTotalDistance,
-    );
+    // Persist new route for client-side position calculation
+    await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: { route: newRoute as any },
+    });
 
     // Emit address change event
     this.trackingGateway.emitAddressChangeEvent(shipmentId, {
@@ -947,6 +951,7 @@ export class MovementService {
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
+        movementState: true,
         addressChangeFees: {
           orderBy: { appliedAt: 'desc' },
           take: 5,
@@ -958,16 +963,20 @@ export class MovementService {
       throw new NotFoundException('Shipment not found');
     }
 
-    const simulationStatus =
-      this.trackingGateway.getSimulationStatus(shipmentId);
-
     return {
       totalDistance: shipment.totalDistance,
       remainingDistance: shipment.remainingDistance,
       estimatedArrival: shipment.estimatedArrival,
       tripStartedAt: shipment.tripStartedAt,
       averageSpeed: shipment.averageSpeed,
-      simulationProgress: simulationStatus,
+      simulationProgress: shipment.movementState
+        ? {
+            currentProgress: shipment.movementState.currentProgress,
+            isMoving: shipment.movementState.isMoving,
+            vehicleSpeedKmh: shipment.movementState.vehicleSpeedKmh,
+            progressUpdatedAt: shipment.movementState.progressUpdatedAt,
+          }
+        : null,
       addressChangeFees: shipment.addressChangeFees,
     };
   }

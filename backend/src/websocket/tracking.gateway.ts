@@ -1,236 +1,21 @@
-import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
-  MessageBody,
-  ConnectedSocket,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { PrismaService } from '../prisma/prisma.service';
-import { JwtService } from '@nestjs/jwt';
-import { Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { PusherService } from '../pusher/pusher.service';
 
-interface LocationUpdate {
-  shipmentId: string;
-  latitude: number;
-  longitude: number;
-  speed?: number;
-  heading?: number;
-  timestamp: Date;
-}
-
-interface RoutePoint {
-  lat: number;
-  lng: number;
-}
-
-interface SimulationState {
-  interval: NodeJS.Timeout;
-  route: RoutePoint[];
-  currentIndex: number;
-  isPaused: boolean;
-  totalDistance: number;
-  remainingDistance: number;
-  deliveryHours: number;
-  startTime: number;
-  pausedAt: number | null;
-  totalPausedTime: number;
-  subStep: number;
-  vehicleSpeedKmh: number; // Current vehicle speed for ETA calculation
-}
-
-@WebSocketGateway({
-  cors: {
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://usps-ten.vercel.app',
-      'https://www-usps-com.vercel.app',
-      /\.vercel\.app$/,
-      /\.up\.railway\.app$/,
-    ],
-    credentials: true,
-  },
-  namespace: '/tracking',
-})
-export class TrackingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
-  @WebSocketServer()
-  server: Server;
-
+/**
+ * TrackingGateway — previously a Socket.IO WebSocket gateway.
+ * Now a thin wrapper over PusherService, emitting events to
+ * the `shipment-{shipmentId}` Pusher channel.
+ *
+ * The class name is kept to avoid cascading renames across MovementModule.
+ */
+@Injectable()
+export class TrackingGateway {
   private readonly logger = new Logger(TrackingGateway.name);
-  private activeSimulations = new Map<string, SimulationState>();
 
-  constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
-  ) {}
+  constructor(private readonly pusherService: PusherService) {}
 
-  async handleConnection(client: Socket) {
-    try {
-      const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
-
-      if (token) {
-        try {
-          const payload = this.jwtService.verify(token);
-          client.data.user = payload;
-          this.logger.log(`Admin client connected: ${client.id}`);
-        } catch (error) {
-          this.logger.log(`Public client connected: ${client.id}`);
-        }
-      } else {
-        this.logger.log(`Public client connected: ${client.id}`);
-      }
-    } catch (error) {
-      this.logger.error(`Connection error: ${error.message}`);
-      client.disconnect();
-    }
-  }
-
-  handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
-  }
-
-  @SubscribeMessage('joinShipment')
-  async handleJoinShipment(
-    @MessageBody() data: { shipmentId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    const { shipmentId } = data;
-
-    try {
-      const shipment = await this.prisma.shipment.findUnique({
-        where: { id: shipmentId },
-        include: {
-          movementState: {
-            include: {
-              pausedByAdmin: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!shipment) {
-        client.emit('error', { message: 'Shipment not found' });
-        return;
-      }
-
-      const room = `shipment:${shipmentId}`;
-      client.join(room);
-
-      const latestLocation = await this.prisma.shipmentLocation.findFirst({
-        where: { shipmentId },
-        orderBy: { recordedAt: 'desc' },
-      });
-
-      // Get simulation state if exists
-      const simulation = this.activeSimulations.get(shipmentId);
-
-      client.emit('joinedShipment', {
-        shipmentId,
-        isMoving: shipment.movementState?.isMoving ?? false,
-        isIntercepted: shipment.movementState ? !shipment.movementState.isMoving : false,
-        interceptReason: shipment.movementState?.interceptReason || null,
-        interceptedAt: shipment.movementState?.pausedAt || null,
-        // Don't expose admin info - provide intercept address instead
-        interceptLocation: shipment.movementState ? {
-          latitude: (shipment.movementState as any).interceptedLat || null,
-          longitude: (shipment.movementState as any).interceptedLng || null,
-          address: (shipment.movementState as any).interceptedAddress || null,
-        } : null,
-        clearReason: shipment.movementState?.clearReason || null,
-        currentLocation: latestLocation || null,
-        shipment,
-        hasActiveSimulation: !!simulation,
-        simulationProgress: simulation ? {
-          currentIndex: simulation.currentIndex,
-          totalPoints: simulation.route.length,
-        } : null,
-      });
-
-      this.logger.log(`Client ${client.id} joined room: ${room}`);
-    } catch (error) {
-      this.logger.error(`Error joining shipment: ${error.message}`);
-      client.emit('error', { message: 'Failed to join shipment' });
-    }
-  }
-
-  @SubscribeMessage('leaveShipment')
-  handleLeaveShipment(
-    @MessageBody() data: { shipmentId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    const { shipmentId } = data;
-    const room = `shipment:${shipmentId}`;
-    client.leave(room);
-    this.logger.log(`Client ${client.id} left room: ${room}`);
-  }
-
-  @SubscribeMessage('updateLocation')
-  async handleLocationUpdate(
-    @MessageBody() data: LocationUpdate,
-    @ConnectedSocket() client: Socket,
-  ) {
-    if (!client.data.user) {
-      client.emit('error', { message: 'Unauthorized' });
-      return;
-    }
-
-    try {
-      const movementState =
-        await this.prisma.shipmentMovementState.findUnique({
-          where: { shipmentId: data.shipmentId },
-        });
-
-      if (!movementState?.isMoving) {
-        client.emit('error', {
-          message: 'Shipment is paused, cannot update location',
-        });
-        return;
-      }
-
-      const location = await this.prisma.shipmentLocation.create({
-        data: {
-          shipmentId: data.shipmentId,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          speed: data.speed || 0,
-          heading: data.heading || 0,
-        },
-      });
-
-      await this.prisma.shipment.update({
-        where: { id: data.shipmentId },
-        data: {
-          currentLocation: `${data.latitude},${data.longitude}`,
-        },
-      });
-
-      this.emitLocationUpdate(data.shipmentId, {
-        latitude: data.latitude,
-        longitude: data.longitude,
-        speed: data.speed,
-        heading: data.heading,
-        timestamp: new Date(),
-      });
-    } catch (error) {
-      this.logger.error(`Error updating location: ${error.message}`);
-      client.emit('error', { message: 'Failed to update location' });
-    }
-  }
-
-  emitLocationUpdate(shipmentId: string, location: any) {
-    const room = `shipment:${shipmentId}`;
-    this.server.to(room).emit('locationUpdate', {
+  emitLocationUpdate(shipmentId: string, location: Record<string, any>): void {
+    this.pusherService.trigger(`shipment-${shipmentId}`, 'location-update', {
       shipmentId,
       ...location,
     });
@@ -240,369 +25,44 @@ export class TrackingGateway
     shipmentId: string,
     reason?: string,
     admin?: { id: string; name: string; email: string } | null,
-    interceptLocation?: { latitude: number | null; longitude: number | null; address: string | null }
-  ) {
-    const room = `shipment:${shipmentId}`;
-    this.server.to(room).emit('shipmentIntercepted', {
+    interceptLocation?: {
+      latitude: number | null;
+      longitude: number | null;
+      address: string | null;
+    },
+  ): void {
+    this.pusherService.trigger(`shipment-${shipmentId}`, 'shipment-intercepted', {
       shipmentId,
       status: 'INTERCEPTED',
       reason: reason || 'Shipment held for inspection',
-      // Don't expose admin info to public - privacy
       timestamp: new Date(),
       location: interceptLocation || null,
     });
-
-    // Pause the simulation if running and track pause time
-    const simulation = this.activeSimulations.get(shipmentId);
-    if (simulation) {
-      simulation.isPaused = true;
-      simulation.pausedAt = Date.now();
-    }
-
-    this.logger.log(`Emitted intercept event for shipment: ${shipmentId}, reason: ${reason}, location: ${interceptLocation?.address}`);
+    this.logger.log(`Emitted shipment-intercepted for ${shipmentId}`);
   }
 
-  emitResumeEvent(shipmentId: string, reason?: string, admin?: { id: string; name: string; email: string } | null) {
-    const room = `shipment:${shipmentId}`;
-    this.server.to(room).emit('shipmentCleared', {
+  emitResumeEvent(
+    shipmentId: string,
+    reason?: string,
+    admin?: { id: string; name: string; email: string } | null,
+  ): void {
+    this.pusherService.trigger(`shipment-${shipmentId}`, 'shipment-cleared', {
       shipmentId,
       status: 'CLEARED',
       reason: reason || 'Shipment cleared and in transit',
-      // Don't expose admin info to public - privacy
       timestamp: new Date(),
     });
-
-    // Resume the simulation if paused and calculate total paused time
-    const simulation = this.activeSimulations.get(shipmentId);
-    if (simulation) {
-      if (simulation.pausedAt) {
-        // Add the duration of this pause to total paused time
-        const pauseDuration = Date.now() - simulation.pausedAt;
-        simulation.totalPausedTime += pauseDuration;
-        this.logger.log(`Shipment ${shipmentId} was paused for ${Math.round(pauseDuration / 1000 / 60)} minutes. Total paused time: ${Math.round(simulation.totalPausedTime / 1000 / 60)} minutes`);
-      }
-      simulation.isPaused = false;
-      simulation.pausedAt = null;
-    }
-
-    this.logger.log(`Emitted cleared event for shipment: ${shipmentId}, reason: ${reason}`);
+    this.logger.log(`Emitted shipment-cleared for ${shipmentId}`);
   }
 
-  emitCancelEvent(shipmentId: string) {
-    const room = `shipment:${shipmentId}`;
-    this.server.to(room).emit('shipmentCancelled', {
+  emitCancelEvent(shipmentId: string): void {
+    this.pusherService.trigger(`shipment-${shipmentId}`, 'shipment-cancelled', {
       shipmentId,
       timestamp: new Date(),
     });
-
-    // Stop any active simulation
-    this.stopSimulation(shipmentId);
-
-    this.logger.log(`Emitted cancel event for shipment: ${shipmentId}`);
+    this.logger.log(`Emitted shipment-cancelled for ${shipmentId}`);
   }
 
-  // Calculate heading between two points
-  private calculateHeading(from: RoutePoint, to: RoutePoint): number {
-    const dLng = to.lng - from.lng;
-    const dLat = to.lat - from.lat;
-    const heading = Math.atan2(dLng, dLat) * (180 / Math.PI);
-    return (heading + 360) % 360;
-  }
-
-  // Calculate distance between two points (in km)
-  private calculateDistance(from: RoutePoint, to: RoutePoint): number {
-    const R = 6371; // Earth's radius in km
-    const dLat = (to.lat - from.lat) * Math.PI / 180;
-    const dLng = (to.lng - from.lng) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  }
-
-  // Calculate total route distance
-  private calculateRouteDistance(route: RoutePoint[]): number {
-    let total = 0;
-    for (let i = 0; i < route.length - 1; i++) {
-      total += this.calculateDistance(route[i], route[i + 1]);
-    }
-    return total;
-  }
-
-  // Calculate remaining distance from current position
-  private calculateRemainingDistance(
-    route: RoutePoint[],
-    currentIndex: number,
-    currentLat: number,
-    currentLng: number,
-  ): number {
-    let remaining = 0;
-    if (currentIndex < route.length - 1) {
-      remaining += this.calculateDistance(
-        { lat: currentLat, lng: currentLng },
-        route[currentIndex + 1],
-      );
-      for (let i = currentIndex + 1; i < route.length - 1; i++) {
-        remaining += this.calculateDistance(route[i], route[i + 1]);
-      }
-    }
-    return remaining;
-  }
-
-  // Start route-based simulation with real-time delivery based on estimated time
-  startRouteSimulation(
-    shipmentId: string,
-    route: RoutePoint[],
-    totalDistance?: number,
-    deliveryDays?: number,
-  ) {
-    // Stop any existing simulation
-    this.stopSimulation(shipmentId);
-
-    if (route.length < 2) {
-      this.logger.warn(`Route too short for shipment: ${shipmentId}`);
-      return;
-    }
-
-    const calculatedDistance =
-      totalDistance || this.calculateRouteDistance(route);
-
-    // Calculate timing based on delivery days - REAL TIME delivery
-    const deliveryHours = (deliveryDays || 1) * 24;
-    const totalSegments = route.length - 1;
-    const STEPS_PER_SEGMENT = 10; // Smooth interpolation between route points
-    const totalSteps = totalSegments * STEPS_PER_SEGMENT;
-
-    // Calculate interval to spread simulation across ACTUAL delivery period
-    // No speed factor - shipment moves in real time to complete in exactly deliveryDays
-    const totalSimulationMs = deliveryHours * 60 * 60 * 1000; // Actual delivery time in ms
-    const UPDATE_INTERVAL_MS = Math.max(1000, Math.floor(totalSimulationMs / totalSteps));
-
-    // Calculate initial vehicle speed based on distance and delivery time
-    const initialSpeedKmh = calculatedDistance / deliveryHours;
-
-    const state: SimulationState = {
-      interval: null as any,
-      route,
-      currentIndex: 0,
-      isPaused: false,
-      totalDistance: calculatedDistance,
-      remainingDistance: calculatedDistance,
-      deliveryHours,
-      startTime: Date.now(),
-      pausedAt: null,
-      totalPausedTime: 0,
-      subStep: 0,
-      vehicleSpeedKmh: initialSpeedKmh,
-    };
-
-    this.logger.log(`Starting real-time simulation for shipment: ${shipmentId}`);
-    this.logger.log(`Delivery time: ${deliveryDays} days (${deliveryHours} hours)`);
-    this.logger.log(`Total steps: ${totalSteps}, Update interval: ${UPDATE_INTERVAL_MS}ms`);
-
-    const interval = setInterval(async () => {
-      try {
-        // Check if paused - don't advance simulation
-        if (state.isPaused) {
-          return;
-        }
-
-        // Check movement state in database
-        const movementState = await this.prisma.shipmentMovementState.findUnique({
-          where: { shipmentId },
-        });
-
-        if (!movementState?.isMoving) {
-          return;
-        }
-
-        const currentPoint = route[state.currentIndex];
-        const nextIndex = Math.min(state.currentIndex + 1, route.length - 1);
-        const nextPoint = route[nextIndex];
-
-        // Interpolate between current and next point
-        const t = state.subStep / STEPS_PER_SEGMENT;
-        const interpolatedLat = currentPoint.lat + (nextPoint.lat - currentPoint.lat) * t;
-        const interpolatedLng = currentPoint.lng + (nextPoint.lng - currentPoint.lng) * t;
-
-        // Calculate speed and heading
-        const heading = this.calculateHeading(currentPoint, nextPoint);
-        const segmentDistance = this.calculateDistance(currentPoint, nextPoint);
-        const speed = state.vehicleSpeedKmh; // Use current vehicle speed
-
-        // Calculate remaining distance
-        const remainingDistance = this.calculateRemainingDistance(
-          route,
-          state.currentIndex,
-          interpolatedLat,
-          interpolatedLng,
-        );
-        state.remainingDistance = remainingDistance;
-
-        // Calculate ETA based on current vehicle speed and remaining distance
-        const remainingHours = remainingDistance / state.vehicleSpeedKmh;
-
-        // Add any current pause time to the ETA
-        const currentPauseMs = state.pausedAt ? Date.now() - state.pausedAt : 0;
-        const etaMinutes = (remainingHours * 60) + (currentPauseMs / (1000 * 60));
-        const eta = new Date(Date.now() + etaMinutes * 60 * 1000);
-
-        // Calculate progress percentage
-        const progressPercent = Math.round((state.currentIndex * STEPS_PER_SEGMENT + state.subStep) / totalSteps * 100);
-
-        // Save to database periodically (every 5 steps)
-        if (state.subStep % 5 === 0) {
-          await this.prisma.shipmentLocation.create({
-            data: {
-              shipmentId,
-              latitude: interpolatedLat,
-              longitude: interpolatedLng,
-              speed: Math.min(speed, 120), // Cap at 120 km/h
-              heading,
-            },
-          });
-
-          await this.prisma.shipment.update({
-            where: { id: shipmentId },
-            data: {
-              currentLocation: `${interpolatedLat.toFixed(6)},${interpolatedLng.toFixed(6)}`,
-              remainingDistance,
-              estimatedArrival: eta,
-            },
-          });
-        }
-
-        // Emit location update with distance and ETA
-        this.emitLocationUpdate(shipmentId, {
-          latitude: interpolatedLat,
-          longitude: interpolatedLng,
-          speed: Math.min(speed, 120),
-          heading,
-          timestamp: new Date(),
-          progress: {
-            currentIndex: state.currentIndex,
-            totalPoints: route.length,
-            percentComplete: progressPercent,
-          },
-          distance: {
-            total: state.totalDistance,
-            remaining: remainingDistance,
-            covered: state.totalDistance - remainingDistance,
-          },
-          eta: {
-            arrival: eta,
-            minutesRemaining: Math.round(etaMinutes),
-          },
-        });
-
-        // Move to next substep
-        state.subStep++;
-        if (state.subStep >= STEPS_PER_SEGMENT) {
-          state.subStep = 0;
-          state.currentIndex++;
-
-          // Check if we've reached the destination
-          if (state.currentIndex >= route.length - 1) {
-            this.logger.log(`Shipment ${shipmentId} reached destination`);
-
-            // Update shipment status to delivered
-            await this.prisma.shipment.update({
-              where: { id: shipmentId },
-              data: { currentStatus: 'DELIVERED' },
-            });
-
-            await this.prisma.shipmentMovementState.update({
-              where: { shipmentId },
-              data: { isMoving: false },
-            });
-
-            // Create delivered event
-            const shipment = await this.prisma.shipment.findUnique({
-              where: { id: shipmentId },
-            });
-
-            await this.prisma.trackingEvent.create({
-              data: {
-                shipmentId,
-                status: 'DELIVERED',
-                description: 'Package delivered successfully',
-                location: shipment?.destinationLocation || 'Destination',
-                eventTime: new Date(),
-              },
-            });
-
-            // Emit delivered event
-            const room = `shipment:${shipmentId}`;
-            this.server.to(room).emit('shipmentDelivered', {
-              shipmentId,
-              timestamp: new Date(),
-            });
-
-            this.stopSimulation(shipmentId);
-          }
-        }
-      } catch (error) {
-        this.logger.error(`Simulation error for ${shipmentId}: ${error.message}`);
-      }
-    }, UPDATE_INTERVAL_MS);
-
-    state.interval = interval;
-    this.activeSimulations.set(shipmentId, state);
-    this.logger.log(`Started real-time route simulation for shipment: ${shipmentId} with ${route.length} points, completing in ${deliveryDays} days`);
-  }
-
-  // Legacy simulation method
-  startSimulation(shipmentId: string) {
-    if (this.activeSimulations.has(shipmentId)) {
-      this.logger.warn(`Simulation already running for shipment: ${shipmentId}`);
-      return;
-    }
-
-    // Create a simple route for legacy simulation
-    const route: RoutePoint[] = [];
-    let currentLat = 40.7128;
-    let currentLng = -74.006;
-    const targetLat = 34.0522;
-    const targetLng = -118.2437;
-
-    for (let i = 0; i <= 20; i++) {
-      const t = i / 20;
-      route.push({
-        lat: currentLat + (targetLat - currentLat) * t,
-        lng: currentLng + (targetLng - currentLng) * t,
-      });
-    }
-
-    this.startRouteSimulation(shipmentId, route);
-  }
-
-  stopSimulation(shipmentId: string) {
-    const simulation = this.activeSimulations.get(shipmentId);
-    if (simulation) {
-      clearInterval(simulation.interval);
-      this.activeSimulations.delete(shipmentId);
-      this.logger.log(`Stopped simulation for shipment: ${shipmentId}`);
-    }
-  }
-
-  // Get current simulation status
-  getSimulationStatus(shipmentId: string) {
-    const simulation = this.activeSimulations.get(shipmentId);
-    if (!simulation) {
-      return null;
-    }
-    return {
-      currentIndex: simulation.currentIndex,
-      totalPoints: simulation.route.length,
-      isPaused: simulation.isPaused,
-      percentComplete: Math.round(
-        (simulation.currentIndex / (simulation.route.length - 1)) * 100,
-      ),
-    };
-  }
-
-  // Emit address change event
   emitAddressChangeEvent(
     shipmentId: string,
     data: {
@@ -611,17 +71,15 @@ export class TrackingGateway
       newEta: Date;
       newRemainingDistance: number;
     },
-  ) {
-    const room = `shipment:${shipmentId}`;
-    this.server.to(room).emit('addressChanged', {
+  ): void {
+    this.pusherService.trigger(`shipment-${shipmentId}`, 'address-changed', {
       shipmentId,
       ...data,
       timestamp: new Date(),
     });
-    this.logger.log(`Emitted address change event for shipment: ${shipmentId}`);
+    this.logger.log(`Emitted address-changed for ${shipmentId}`);
   }
 
-  // Emit speed change event - broadcasts to all clients watching this shipment
   emitSpeedChange(
     shipmentId: string,
     data: {
@@ -629,31 +87,17 @@ export class TrackingGateway
       estimatedArrival: Date;
       remainingDistance: number;
     },
-  ) {
-    // Update simulation speed if active
-    const simulation = this.activeSimulations.get(shipmentId);
-    if (simulation) {
-      simulation.vehicleSpeedKmh = data.speedKmh;
-      this.logger.log(`Updated simulation speed for shipment: ${shipmentId} to ${data.speedKmh} km/h`);
-    }
-
-    const room = `shipment:${shipmentId}`;
-    this.server.to(room).emit('speedChanged', {
+  ): void {
+    this.pusherService.trigger(`shipment-${shipmentId}`, 'speed-changed', {
       shipmentId,
       ...data,
       timestamp: new Date(),
     });
-    this.logger.log(`Emitted speed change event for shipment: ${shipmentId}, new speed: ${data.speedKmh} km/h`);
+    this.logger.log(`Emitted speed-changed for ${shipmentId}, speed: ${data.speedKmh} km/h`);
   }
 
-  // Update vehicle speed for an active simulation
-  updateSimulationSpeed(shipmentId: string, speedKmh: number) {
-    const simulation = this.activeSimulations.get(shipmentId);
-    if (simulation) {
-      simulation.vehicleSpeedKmh = speedKmh;
-      this.logger.log(`Updated simulation speed for shipment: ${shipmentId} to ${speedKmh} km/h`);
-      return true;
-    }
+  // Kept for backward compatibility with callers that check simulation status
+  updateSimulationSpeed(_shipmentId: string, _speedKmh: number): boolean {
     return false;
   }
 }

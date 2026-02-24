@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { io, Socket } from 'socket.io-client'
+import { subscribeToChannel, unsubscribeFromChannel } from '@/lib/support-socket'
 import api from '@/lib/api'
 import type { Shipment, TrackingEvent } from '@/lib/types'
 import { ArrowLeft, MapPin, Truck, Clock, Navigation, Package, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, User, Phone, Mail, FileText, Scale, DollarSign, Ruler, Calendar, X } from 'lucide-react'
@@ -38,8 +38,6 @@ export default function PublicTrackingMapPage() {
   const params = useParams()
   const router = useRouter()
   const trackingNumber = params.trackingNumber as string
-
-  const socket = useRef<Socket | null>(null)
 
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [events, setEvents] = useState<TrackingEvent[]>([])
@@ -275,94 +273,39 @@ export default function PublicTrackingMapPage() {
     loadShipment()
   }, [trackingNumber])
 
-  // WebSocket connection for real-time updates
+  // Pusher subscription for real-time state-change events
   useEffect(() => {
-    if (!shipment) return
+    if (!shipment?.id) return
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3000'
+    const channel = subscribeToChannel(`shipment-${shipment.id}`)
 
-    socket.current = io(`${wsUrl}/tracking`, {
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    })
-
-    socket.current.on('connect', () => {
-      socket.current?.emit('joinShipment', { shipmentId: shipment.id })
-    })
-
-    socket.current.on('joinedShipment', (data) => {
-      const shouldMove = data.isMoving && !data.isIntercepted
-      setIsMoving(shouldMove)
-      setIsIntercepted(data.isIntercepted || false)
-      setInterceptReason(data.interceptReason || null)
-      setInterceptedAt(data.interceptedAt || null)
-      setInterceptLocation(data.interceptLocation || null)
-      setClearReason(data.clearReason || null)
-
-      // If intercepted and we have intercept location, freeze there
-      if (data.isIntercepted && data.interceptLocation?.latitude && data.interceptLocation?.longitude) {
-        const lat = data.interceptLocation.latitude
-        const lng = data.interceptLocation.longitude
-        animatedPositionRef.current = [lat, lng]
-        // Update marker imperatively
-        if (truckMarkerRef.current) {
-          truckMarkerRef.current.setLatLng([lat, lng])
-        }
-        // Seek the movement to this position
-        if (movement) {
-          const currentState = movement.getState()
-          setInitialProgress(currentState.progress)
-        }
-      }
-    })
-
-    socket.current.on('locationUpdate', (data) => {
-      // Location updates from server - sync position with admin map
+    // Admin manually updated location or trip just started
+    channel.bind('location-update', (data: any) => {
       if (data.latitude !== undefined && data.longitude !== undefined) {
-        // Update position imperatively for smooth sync
         animatedPositionRef.current = [data.latitude, data.longitude]
         if (truckMarkerRef.current) {
           truckMarkerRef.current.setLatLng([data.latitude, data.longitude])
         }
-
-        // If progress info is included, seek the movement hook
-        if (data.progress?.percentComplete !== undefined && movementRef.current) {
-          const progress = data.progress.percentComplete / 100
-          movementRef.current.seekTo(progress)
-        }
       }
-
-      // Update shipment data
-      if (data.remainingDistance !== undefined || data.estimatedArrival || data.eta || data.distance) {
-        const newETA = data.estimatedArrival ?? data.eta?.arrival
-        if (newETA) {
-          setDisplayedETA(newETA)
-        }
-        setShipment(prev => {
-          if (!prev) return prev
-          return {
-            ...prev,
-            remainingDistance: data.remainingDistance ?? data.distance?.remaining ?? prev.remainingDistance,
-            estimatedArrival: newETA ?? prev.estimatedArrival,
-            currentLocation: data.currentLocation ?? prev.currentLocation,
-          }
-        })
+      const newETA = data.estimatedArrival ?? data.eta?.arrival
+      if (newETA) setDisplayedETA(newETA)
+      if (data.remainingDistance !== undefined) {
+        setShipment(prev => prev ? {
+          ...prev,
+          remainingDistance: data.remainingDistance,
+          estimatedArrival: newETA ?? prev.estimatedArrival,
+        } : prev)
       }
     })
 
-    socket.current.on('shipmentIntercepted', (data) => {
-      // Pause movement - the hook will freeze at current position
+    channel.bind('shipment-intercepted', (data: any) => {
       setIsMoving(false)
       setIsIntercepted(true)
       setInterceptReason(data.reason || 'Shipment held for inspection')
       setInterceptedAt(data.timestamp || new Date().toISOString())
       setShowInterceptNotification(true)
-
-      // Store intercept location for display
       if (data.location) {
         setInterceptLocation(data.location)
-        // Set the animated position to the intercept location imperatively
         if (data.location.latitude && data.location.longitude) {
           animatedPositionRef.current = [data.location.latitude, data.location.longitude]
           if (truckMarkerRef.current) {
@@ -372,8 +315,7 @@ export default function PublicTrackingMapPage() {
       }
     })
 
-    socket.current.on('shipmentCleared', (data) => {
-      // Resume movement from current position
+    channel.bind('shipment-cleared', (data: any) => {
       setIsMoving(true)
       setIsIntercepted(false)
       setClearReason(data.reason || 'Shipment cleared and in transit')
@@ -382,35 +324,38 @@ export default function PublicTrackingMapPage() {
       setShowClearNotification(true)
     })
 
-    socket.current.on('shipmentPaused', () => setIsMoving(false))
-    socket.current.on('shipmentResumed', () => setIsMoving(true))
-    socket.current.on('shipmentDelivered', () => {
+    channel.bind('shipment-delivered', () => {
       setIsMoving(false)
       setIsIntercepted(false)
       setShipment(prev => prev ? { ...prev, currentStatus: 'DELIVERED' } : null)
     })
 
-    // Listen for speed changes from admin
-    socket.current.on('speedChanged', (data) => {
-      console.log('Speed changed by admin:', data)
+    channel.bind('speed-changed', (data: any) => {
       setVehicleSpeedKmh(data.speedKmh)
-      // Update the movement hook speed if available
       if (movementRef.current) {
         movementRef.current.setVehicleSpeed(data.speedKmh)
       }
-      // Update ETA display - this is the key update for Status & Dates section
       if (data.estimatedArrival) {
-        console.log('Updating ETA from speed change:', data.estimatedArrival)
         setDisplayedETA(data.estimatedArrival)
         setShipment(prev => prev ? { ...prev, estimatedArrival: data.estimatedArrival } : null)
       }
     })
 
+    channel.bind('address-changed', (data: any) => {
+      if (data.newEta) {
+        setDisplayedETA(data.newEta)
+        setShipment(prev => prev ? {
+          ...prev,
+          estimatedArrival: data.newEta,
+          destinationLocation: data.newDestination ?? prev.destinationLocation,
+        } : null)
+      }
+    })
+
     return () => {
-      socket.current?.emit('leaveShipment', { shipmentId: shipment.id })
-      socket.current?.disconnect()
+      unsubscribeFromChannel(`shipment-${shipment.id}`)
     }
-  }, [shipment, movement])
+  }, [shipment?.id])
 
   // Auto-hide interception notification after 60 seconds
   useEffect(() => {

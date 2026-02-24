@@ -6,7 +6,6 @@ import { SupportController } from './support.controller';
 import { SupportAuthController } from './support-auth.controller';
 import { SupportService } from './support.service';
 import { SupportAuthService } from './support-auth.service';
-import { SupportGateway } from './support.gateway';
 import { SupportJwtStrategy } from './strategies/support-jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 
@@ -27,9 +26,8 @@ import { PrismaModule } from '../prisma/prisma.module';
   providers: [
     SupportService,
     SupportAuthService,
-    SupportGateway,
     SupportJwtStrategy,
   ],
-  exports: [SupportService, SupportGateway],
+  exports: [SupportService],
 })
 export class SupportModule {}

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Package, BarChart3, LogOut, Menu, X, Home, Plus, Truck, Search, Bell, User, ChevronDown, MapPin, MessageCircle } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import api from '@/lib/api'
-import { getSupportSocket } from '@/lib/support-socket'
+import { subscribeToChannel, unsubscribeFromChannel } from '@/lib/support-socket'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -42,29 +42,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => clearInterval(interval)
   }, [fetchUnreadCount])
 
-  // Listen to WebSocket for real-time notification updates
+  // Listen to Pusher for real-time notification updates
   useEffect(() => {
-    if (!token) return
+    const channel = subscribeToChannel('admin-broadcast')
 
-    const socket = getSupportSocket(token)
-
-    const handleNewMessage = () => {
-      // Refresh unread count when new message arrives
-      fetchUnreadCount()
-    }
-
-    const handleConversationUpdated = () => {
-      fetchUnreadCount()
-    }
-
-    socket.on('newMessage', handleNewMessage)
-    socket.on('conversationUpdated', handleConversationUpdated)
+    channel.bind('new-message', fetchUnreadCount)
+    channel.bind('conversation-updated', fetchUnreadCount)
 
     return () => {
-      socket.off('newMessage', handleNewMessage)
-      socket.off('conversationUpdated', handleConversationUpdated)
+      channel.unbind('new-message', fetchUnreadCount)
+      channel.unbind('conversation-updated', fetchUnreadCount)
+      unsubscribeFromChannel('admin-broadcast')
     }
-  }, [token, fetchUnreadCount])
+  }, [fetchUnreadCount])
 
   // Reset unread count when on support page
   useEffect(() => {

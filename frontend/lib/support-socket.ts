@@ -1,63 +1,59 @@
-import { io, Socket } from 'socket.io-client'
+import Pusher, { Channel } from 'pusher-js'
 
-let socket: Socket | null = null
-let currentToken: string | null = null
+let pusherInstance: Pusher | null = null
 
-export function getSupportSocket(token: string): Socket {
-  // If token changed or socket doesn't exist/disconnected, create new connection
-  if (!socket || !socket.connected || currentToken !== token) {
-    // Disconnect existing socket if token changed
-    if (socket && currentToken !== token) {
-      socket.disconnect()
-      socket = null
-    }
+function getPusherInstance(): Pusher {
+  if (!pusherInstance) {
+    const key = process.env.NEXT_PUBLIC_PUSHER_KEY || ''
+    const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2'
 
-    currentToken = token
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
-
-    socket = io(`${wsUrl}/support`, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-      forceNew: false,
+    pusherInstance = new Pusher(key, {
+      cluster,
+      forceTLS: true,
     })
 
-    socket.on('connect', () => {
-      console.log('Support socket connected, id:', socket?.id)
+    pusherInstance.connection.bind('connected', () => {
+      console.log('Pusher connected')
     })
 
-    socket.on('disconnect', (reason) => {
-      console.log('Support socket disconnected:', reason)
+    pusherInstance.connection.bind('disconnected', () => {
+      console.log('Pusher disconnected')
     })
 
-    socket.on('connect_error', (error) => {
-      console.error('Support socket connection error:', error.message)
-    })
-
-    socket.on('reconnect', (attemptNumber) => {
-      console.log('Support socket reconnected after', attemptNumber, 'attempts')
+    pusherInstance.connection.bind('error', (error: any) => {
+      console.error('Pusher connection error:', error)
     })
   }
 
-  return socket
+  return pusherInstance
 }
 
-export function disconnectSupportSocket() {
-  if (socket) {
-    socket.disconnect()
-    socket = null
-    currentToken = null
+export function subscribeToChannel(channelName: string): Channel {
+  return getPusherInstance().subscribe(channelName)
+}
+
+export function unsubscribeFromChannel(channelName: string): void {
+  getPusherInstance().unsubscribe(channelName)
+}
+
+export function getPusher(): Pusher {
+  return getPusherInstance()
+}
+
+export function isPusherConnected(): boolean {
+  return pusherInstance?.connection.state === 'connected'
+}
+
+export function disconnectPusher(): void {
+  if (pusherInstance) {
+    pusherInstance.disconnect()
+    pusherInstance = null
   }
 }
 
-export function isSupportSocketConnected(): boolean {
-  return socket?.connected ?? false
-}
-
-export function getSupportSocketInstance(): Socket | null {
-  return socket
+// Legacy alias kept so any direct callers of getSupportSocket(token)
+// get a channel object for the admin-broadcast channel instead.
+// All components should migrate to subscribeToChannel() directly.
+export function getSupportChannel(): Channel {
+  return subscribeToChannel('admin-broadcast')
 }
